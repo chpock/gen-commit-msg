@@ -87,6 +87,21 @@ func getBoolFlagOrEnv(flags *flag.FlagSet, name, envVar string, defaultVal bool)
 	return b
 }
 
+func Usage() {
+	flags := flag.NewFlagSet("gen-commit-msg", flag.ContinueOnError)
+	flags.UintP("subject-count", "n", 5, "number of subject variants")
+	flags.Bool("body", true, "generate message body")
+	flags.BoolP("quiet", "q", false, "suppress progress output")
+	flags.StringP("agent", "a", "gen-commit-msg", "opencode agent name")
+	flags.StringP("log-level", "l", "error", "log verbosity")
+	flags.String("log-file", "", "log output file, '-' for stdout")
+	flags.String("pause", "on-error", "pause before exit: on, off, on-error")
+	flags.String("install-agent", "if-not-exists", "agent install behavior: always, if-not-exists, no")
+	flags.BoolP("version", "V", false, "print version and exit")
+	flags.BoolP("help", "h", false, "print help and exit")
+	flags.Usage()
+}
+
 func getUintFlagOrEnv(flags *flag.FlagSet, name, envVar string, defaultVal uint) uint {
 	val, _ := flags.GetUint(name)
 	if flags.Changed(name) {

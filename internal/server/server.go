@@ -2,6 +2,7 @@ package server
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -47,7 +48,8 @@ func (s *ProcessServer) Start(ctx context.Context) (string, error) {
 		cancel()
 		return "", fmt.Errorf("stdout pipe: %w", err)
 	}
-	s.cmd.Stderr = nil // discard opencode stderr
+	var stderrBuf bytes.Buffer
+	s.cmd.Stderr = &stderrBuf
 
 	if err := s.cmd.Start(); err != nil {
 		cancel()
@@ -57,6 +59,9 @@ func (s *ProcessServer) Start(ctx context.Context) (string, error) {
 	baseURL, err := parseListenURL(stdout, 30*time.Second)
 	if err != nil {
 		s.Stop()
+		if stderrBuf.Len() > 0 {
+			return "", fmt.Errorf("parse listen URL: %w\nstderr: %s", err, stderrBuf.String())
+		}
 		return "", fmt.Errorf("parse listen URL: %w", err)
 	}
 	s.baseURL = baseURL
@@ -74,15 +79,18 @@ func parseListenURL(r io.Reader, timeout time.Duration) (string, error) {
 	errCh := make(chan error, 1)
 
 	go func() {
+		var output strings.Builder
 		scanner := bufio.NewScanner(r)
 		for scanner.Scan() {
 			line := scanner.Text()
+			output.WriteString(line)
+			output.WriteByte('\n')
 			if matches := listenURLRe.FindStringSubmatch(line); len(matches) > 1 {
 				ch <- matches[1]
 				return
 			}
 		}
-		errCh <- errors.New("opencode exited without printing listen URL")
+		errCh <- fmt.Errorf("opencode exited without printing listen URL. Output:\n%s", output.String())
 	}()
 
 	select {
@@ -103,22 +111,31 @@ func healthCheck(ctx context.Context, baseURL string) error {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		// If /health returns an error, try connecting to the host:port to check if it's listening
 		return checkListen(baseURL)
 	}
 	defer resp.Body.Close()
-	return nil
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+	return checkListen(baseURL)
 }
 
 func checkListen(baseURL string) error {
 	addr := strings.TrimPrefix(baseURL, "http://")
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		addr = baseURL
+		host = addr
+		port = ""
 	}
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), 3*time.Second)
+	var dialAddr string
+	if port != "" {
+		dialAddr = net.JoinHostPort(host, port)
+	} else {
+		dialAddr = host
+	}
+	conn, err := net.DialTimeout("tcp", dialAddr, 3*time.Second)
 	if err != nil {
-		return fmt.Errorf("server not listening on %s: %w", addr, err)
+		return fmt.Errorf("server not listening on %s: %w", dialAddr, err)
 	}
 	conn.Close()
 	return nil

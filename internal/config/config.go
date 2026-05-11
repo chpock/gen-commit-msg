@@ -99,6 +99,10 @@ func Usage() {
 	flags.String("install-agent", "if-not-exists", "agent install behavior: always, if-not-exists, no")
 	flags.BoolP("version", "V", false, "print version and exit")
 	flags.BoolP("help", "h", false, "print help and exit")
+	flags.Usage = func() {
+		fmt.Fprintf(flags.Output(), "Usage of %s:\n", flags.Name())
+		flags.PrintDefaults()
+	}
 	flags.Usage()
 }
 

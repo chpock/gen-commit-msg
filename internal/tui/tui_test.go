@@ -9,17 +9,38 @@ import (
 )
 
 func TestModelInit(t *testing.T) {
-	m := NewModel(5)
+	m := NewModel(5, false)
 	if m.state != stateSpinner {
 		t.Error("initial state should be spinner")
 	}
 	if m.subjectCount != 5 {
 		t.Errorf("subjectCount = %d, want 5", m.subjectCount)
 	}
+	if m.quiet {
+		t.Error("quiet should be false")
+	}
+}
+
+func TestModelInitQuiet(t *testing.T) {
+	m := NewModel(5, true)
+	if m.state != stateSpinner {
+		t.Error("initial state should be spinner")
+	}
+	if !m.quiet {
+		t.Error("quiet should be true")
+	}
+}
+
+func TestQuietInitSkipsSpinner(t *testing.T) {
+	m := NewModel(5, true)
+	cmd := m.Init()
+	if cmd != nil {
+		t.Error("Init with quiet should return nil, skipping spinner")
+	}
 }
 
 func TestModelInitMsg(t *testing.T) {
-	m := NewModel(3)
+	m := NewModel(3, false)
 	cmd := m.Init()
 	if cmd == nil {
 		t.Error("Init should return a command")
@@ -27,7 +48,7 @@ func TestModelInitMsg(t *testing.T) {
 }
 
 func TestModelQuitOnCtrlC(t *testing.T) {
-	m := NewModel(3)
+	m := NewModel(3, false)
 	msg := tea.KeyMsg{Type: tea.KeyCtrlC}
 	updated, _ := m.Update(msg)
 	if updated.(Model).quitting != true {
@@ -36,7 +57,7 @@ func TestModelQuitOnCtrlC(t *testing.T) {
 }
 
 func TestModelQuitOnEsc(t *testing.T) {
-	m := NewModel(3)
+	m := NewModel(3, false)
 	msg := tea.KeyMsg{Type: tea.KeyEsc}
 	updated, _ := m.Update(msg)
 	if updated.(Model).quitting != true {
@@ -67,7 +88,7 @@ func TestSetErrorReturnsGenerationResultMsg(t *testing.T) {
 }
 
 func TestSingleMessageAutoSelect(t *testing.T) {
-	m := NewModel(1)
+	m := NewModel(1, false)
 	msg := SetMessages([]CommitItem{{Subject: "feat: done", Body: ""}})
 	updated, cmd := m.Update(msg)
 	if updated.(Model).selected != "feat: done" {
@@ -79,7 +100,7 @@ func TestSingleMessageAutoSelect(t *testing.T) {
 }
 
 func TestMultiMessageGoesToResultState(t *testing.T) {
-	m := NewModel(3)
+	m := NewModel(3, false)
 	msg := SetMessages([]CommitItem{
 		{Subject: "feat: a", Body: ""},
 		{Subject: "feat: b", Body: ""},
@@ -91,7 +112,7 @@ func TestMultiMessageGoesToResultState(t *testing.T) {
 }
 
 func TestZeroMessagesGoesToErrorState(t *testing.T) {
-	m := NewModel(3)
+	m := NewModel(3, false)
 	msg := SetMessages([]CommitItem{})
 	updated, _ := m.Update(msg)
 	if updated.(Model).state != stateError {
@@ -103,7 +124,7 @@ func TestZeroMessagesGoesToErrorState(t *testing.T) {
 }
 
 func TestErrorMsgGoesToErrorState(t *testing.T) {
-	m := NewModel(3)
+	m := NewModel(3, false)
 	msg := SetError(fmt.Errorf("server crash"))
 	updated, _ := m.Update(msg)
 	if updated.(Model).state != stateError {
@@ -133,15 +154,23 @@ func TestFormatMessageWithBody(t *testing.T) {
 }
 
 func TestSpinnerView(t *testing.T) {
-	m := NewModel(5)
+	m := NewModel(5, false)
 	v := m.View()
 	if !contains(v, "Generating commit messages") {
 		t.Errorf("spinner view missing label: %q", v)
 	}
 }
 
+func TestSpinnerViewQuiet(t *testing.T) {
+	m := NewModel(5, true)
+	v := m.View()
+	if contains(v, "Generating commit messages") {
+		t.Errorf("quiet spinner view should suppress label, got: %q", v)
+	}
+}
+
 func TestErrorView(t *testing.T) {
-	m := NewModel(5)
+	m := NewModel(5, false)
 	m.state = stateError
 	m.err = fmt.Errorf("test error")
 	v := m.View()
@@ -154,7 +183,7 @@ func TestErrorView(t *testing.T) {
 }
 
 func TestSelectedMessage(t *testing.T) {
-	m := NewModel(5)
+	m := NewModel(5, false)
 	m.selected = "feat: test"
 	if m.SelectedMessage() != "feat: test" {
 		t.Error("SelectedMessage() mismatch")
@@ -162,7 +191,7 @@ func TestSelectedMessage(t *testing.T) {
 }
 
 func TestErrorAccessor(t *testing.T) {
-	m := NewModel(5)
+	m := NewModel(5, false)
 	err := fmt.Errorf("oops")
 	m.err = err
 	if m.Error() != err {
@@ -171,7 +200,7 @@ func TestErrorAccessor(t *testing.T) {
 }
 
 func TestShouldQuit(t *testing.T) {
-	m := NewModel(5)
+	m := NewModel(5, false)
 	if m.ShouldQuit() {
 		t.Error("ShouldQuit should be false initially")
 	}

@@ -37,11 +37,12 @@ type Model struct {
 	quitting     bool
 	err          error
 	subjectCount int
+	quiet        bool
 	width        int
 	height       int
 }
 
-func NewModel(subjectCount int) Model {
+func NewModel(subjectCount int, quiet bool) Model {
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
 
@@ -57,6 +58,7 @@ func NewModel(subjectCount int) Model {
 		spinner:      s,
 		list:         l,
 		subjectCount: subjectCount,
+		quiet:        quiet,
 	}
 }
 
@@ -66,6 +68,9 @@ type generationResultMsg struct {
 }
 
 func (m Model) Init() tea.Cmd {
+	if m.quiet {
+		return nil
+	}
 	return m.spinner.Tick
 }
 
@@ -158,6 +163,9 @@ func formatMessage(item CommitItem) string {
 func (m Model) View() string {
 	switch m.state {
 	case stateSpinner:
+		if m.quiet {
+			return ""
+		}
 		return fmt.Sprintf("\n  %s Generating commit messages...\n", m.spinner.View())
 	case stateResult:
 		return m.list.View()

@@ -26,7 +26,7 @@ func main() {
 	cfg, err := config.ParseFlags()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		os.Exit(2)
 	}
 
 	if cfg.Version {
@@ -112,7 +112,23 @@ func main() {
 		return
 	}
 
-	m := tui.NewModel(int(cfg.SubjectCount))
+	if cfg.Quiet && cfg.SubjectCount == 1 {
+		messages, err := oc.GenerateMessages(ctx, sessionID, opencode.GenerateParams{
+			SubjectCount: int(cfg.SubjectCount),
+			Body:         cfg.Body,
+		})
+		cleanup()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		if len(messages) > 0 {
+			fmt.Println(formatMessageFromOC(messages[0]))
+		}
+		return
+	}
+
+	m := tui.NewModel(int(cfg.SubjectCount), cfg.Quiet)
 	p := tea.NewProgram(m)
 
 	go func() {

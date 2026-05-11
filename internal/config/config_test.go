@@ -86,3 +86,19 @@ func TestParseFlagsCLIOverridesEnv(t *testing.T) {
 		t.Errorf("SubjectCount = %d, want 7 (CLI overrides env)", cfg.SubjectCount)
 	}
 }
+
+func TestParseFlagsUnknownFlag(t *testing.T) {
+	os.Args = []string{"gen-commit-msg", "--nonexistent"}
+	_, err := ParseFlags()
+	if err == nil {
+		t.Fatal("expected error for unknown flag")
+	}
+}
+
+func TestParseFlagsInvalidValue(t *testing.T) {
+	os.Args = []string{"gen-commit-msg", "--subject-count", "abc"}
+	_, err := ParseFlags()
+	if err == nil {
+		t.Fatal("expected error for invalid flag value")
+	}
+}

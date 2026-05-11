@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -15,23 +16,23 @@ type state int
 const (
 	stateSpinner state = iota
 	stateResult
-	stateDone
+	stateError
 )
 
-type commitItem struct {
-	subject string
-	body    string
+type CommitItem struct {
+	Subject string
+	Body    string
 }
 
-func (i commitItem) Title() string       { return i.subject }
-func (i commitItem) Description() string { return i.body }
-func (i commitItem) FilterValue() string { return i.subject }
+func (i CommitItem) Title() string       { return i.Subject }
+func (i CommitItem) Description() string { return i.Body }
+func (i CommitItem) FilterValue() string { return i.Subject }
 
 type Model struct {
 	state        state
 	spinner      spinner.Model
 	list         list.Model
-	messages     []commitItem
+	messages     []CommitItem
 	selected     string
 	quitting     bool
 	err          error
@@ -42,13 +43,14 @@ type Model struct {
 
 func NewModel(subjectCount int) Model {
 	s := spinner.New()
-	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	s.Spinner = spinner.MiniDot
 
-	l := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
+	delegate := newCommitDelegate()
+	l := list.New([]list.Item{}, delegate, 40, 10)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
+	l.DisableQuitKeybindings()
 
 	return Model{
 		state:        stateSpinner,
@@ -59,32 +61,20 @@ func NewModel(subjectCount int) Model {
 }
 
 type generationResultMsg struct {
-	messages []commitItem
+	messages []CommitItem
 	err      error
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, generateMessages(m.subjectCount))
+	return m.spinner.Tick
 }
 
-func generateMessages(count int) tea.Cmd {
-	return func() tea.Msg {
-		// Actual generation is done externally; this is a placeholder
-		// The real messages are set before the TUI starts via SetMessages()
-		return generationResultMsg{}
-	}
+func SetMessages(messages []CommitItem) tea.Msg {
+	return generationResultMsg{messages: messages}
 }
 
-func SetMessages(messages []commitItem) tea.Cmd {
-	return func() tea.Msg {
-		return generationResultMsg{messages: messages}
-	}
-}
-
-func SetError(err error) tea.Cmd {
-	return func() tea.Msg {
-		return generationResultMsg{err: err}
-	}
+func SetError(err error) tea.Msg {
+	return generationResultMsg{err: err}
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -98,27 +88,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.list.SetSize(msg.Width, msg.Height-2)
+		w := msg.Width
+		if w < 40 {
+			w = 40
+		}
+		m.list.SetSize(w, msg.Height-2)
 		return m, nil
 	case generationResultMsg:
 		if msg.err != nil {
 			m.err = msg.err
-			m.state = stateDone
-			return m, tea.Quit
+			m.state = stateError
+			return m, nil
 		}
 		m.messages = msg.messages
-		if len(m.messages) == 1 {
+		switch len(m.messages) {
+		case 0:
+			m.err = fmt.Errorf("no commit messages generated")
+			m.state = stateError
+			return m, nil
+		case 1:
 			m.selected = formatMessage(m.messages[0])
-			m.state = stateDone
 			return m, tea.Quit
+		default:
+			items := make([]list.Item, len(m.messages))
+			for i, cm := range m.messages {
+				items[i] = cm
+			}
+			m.list.SetItems(items)
+			m.state = stateResult
+			return m, nil
 		}
-		items := make([]list.Item, len(m.messages))
-		for i, cm := range m.messages {
-			items[i] = cm
-		}
-		m.list.SetItems(items)
-		m.state = stateResult
-		return m, nil
 	}
 
 	switch m.state {
@@ -129,26 +128,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stateResult:
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
-		switch msg := msg.(type) {
-		case tea.KeyMsg:
-			if msg.Type == tea.KeyEnter {
-				if item, ok := m.list.SelectedItem().(commitItem); ok {
-					m.selected = formatMessage(item)
-					m.state = stateDone
-					return m, tea.Quit
-				}
+		if key, ok := msg.(tea.KeyMsg); ok && key.Type == tea.KeyEnter {
+			if item, ok := m.list.SelectedItem().(CommitItem); ok {
+				m.selected = formatMessage(item)
+				return m, tea.Quit
 			}
 		}
 		return m, cmd
+	case stateError:
+		if _, ok := msg.(tea.KeyMsg); ok {
+			m.quitting = true
+			return m, tea.Quit
+		}
 	}
 	return m, nil
 }
 
-func formatMessage(item commitItem) string {
-	if item.body == "" {
-		return strings.TrimSpace(item.subject)
+func formatMessage(item CommitItem) string {
+	if item.Body == "" {
+		return strings.TrimSpace(item.Subject)
 	}
-	return strings.TrimSpace(item.subject) + "\n\n" + strings.TrimSpace(item.body)
+	return strings.TrimSpace(item.Subject) + "\n\n" + strings.TrimSpace(item.Body)
 }
 
 func (m Model) View() string {
@@ -157,8 +157,8 @@ func (m Model) View() string {
 		return fmt.Sprintf("\n  %s Generating commit messages...\n", m.spinner.View())
 	case stateResult:
 		return m.list.View()
-	case stateDone:
-		return ""
+	case stateError:
+		return fmt.Sprintf("\n  Error: %s\n\n  Press any key to exit.\n", m.err)
 	}
 	return ""
 }
@@ -173,4 +173,67 @@ func (m Model) Error() error {
 
 func (m Model) ShouldQuit() bool {
 	return m.quitting
+}
+
+type commitItemDelegate struct {
+	list.DefaultDelegate
+}
+
+func newCommitDelegate() list.ItemDelegate {
+	d := list.NewDefaultDelegate()
+	d.Styles.SelectedTitle = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(lipgloss.Color("205")).
+		Foreground(lipgloss.NoColor{}).
+		Padding(0, 0, 0, 1)
+	d.Styles.SelectedDesc = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(lipgloss.Color("205")).
+		Foreground(lipgloss.NoColor{}).
+		Padding(0, 0, 0, 1)
+	d.Styles.NormalTitle = lipgloss.NewStyle().
+		Foreground(lipgloss.NoColor{}).
+		Padding(0, 0, 0, 1)
+	d.Styles.NormalDesc = lipgloss.NewStyle().
+		Foreground(lipgloss.NoColor{}).
+		Padding(0, 0, 0, 1)
+	d.SetSpacing(0)
+	return d
+}
+
+func (d commitItemDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	ci, ok := item.(CommitItem)
+	if !ok {
+		d.DefaultDelegate.Render(w, m, index, item)
+		return
+	}
+
+	var (
+		titleStyle, descStyle lipgloss.Style
+		prefix                string
+	)
+
+	if index == m.Index() {
+		prefix = "> "
+		titleStyle = lipgloss.NewStyle().Bold(true)
+		descStyle = lipgloss.NewStyle()
+	} else {
+		prefix = "  "
+		titleStyle = lipgloss.NewStyle()
+		descStyle = lipgloss.NewStyle()
+	}
+
+	s := titleStyle.Render(prefix + ci.Subject)
+	if ci.Body != "" {
+		s += "\n" + descStyle.Render("    " + ci.Body)
+	}
+	fmt.Fprint(w, s)
+}
+
+func (d commitItemDelegate) Height() int {
+	return 3
+}
+
+func (d commitItemDelegate) Spacing() int {
+	return 0
 }

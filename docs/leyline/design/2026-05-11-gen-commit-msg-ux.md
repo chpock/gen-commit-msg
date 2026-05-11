@@ -4,7 +4,7 @@ Date: 2026-05-11
 Product spec: docs/leyline/specs/2026-05-11-gen-commit-msg-design.md
 Surfaces: cli-only
 
-UX spec approved - round 3 - 2026-05-11
+UX spec approved - round 4 - 2026-05-11
 
 ## Surfaces enumerated
 
@@ -97,7 +97,7 @@ Failure paths:
 4. Result printed to stdout
 5. Session deleted, server stopped
 6. Exit 0
-7. No TUI, no progress messages. `--quiet` is a no-op in this mode (nothing to suppress).
+7. No TUI, no progress messages. `--quiet` is a no-op in this mode (nothing to suppress). `--pause` is a no-op in non-TTY mode (no TUI overlay to render).
 
 ## State matrix
 

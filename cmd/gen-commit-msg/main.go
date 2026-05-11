@@ -80,19 +80,21 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-	defer srv.Stop()
 
 	oc := opencode.NewClient(baseURL)
 	sessionID, err := oc.CreateSession(ctx, cfg.Agent)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-	defer func() {
+	cleanup := func() {
 		delCtx, delCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer delCancel()
 		oc.DeleteSession(delCtx, sessionID)
-	}()
+		srv.Stop()
+	}
+	defer cleanup()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		cleanup()
+		os.Exit(1)
+	}
 
 	if !isTTY && cfg.SubjectCount == 1 {
 		messages, err := oc.GenerateMessages(ctx, sessionID, opencode.GenerateParams{
@@ -101,6 +103,7 @@ func main() {
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			cleanup()
 			os.Exit(1)
 		}
 		if len(messages) > 0 {
@@ -131,6 +134,7 @@ func main() {
 	finalModel, err := p.Run()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		cleanup()
 		os.Exit(1)
 	}
 
@@ -139,6 +143,11 @@ func main() {
 
 	if cfg.Pause == "on" || (cfg.Pause == "on-error" && m.Error() != nil) {
 		fmt.Fprintf(os.Stderr, "\nPress any key to exit...")
+		if isTTY {
+			buf := make([]byte, 1)
+			os.Stdin.Read(buf)
+		}
+		fmt.Fprintln(os.Stderr)
 	}
 }
 

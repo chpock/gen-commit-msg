@@ -56,6 +56,23 @@ func TestParseFlagsEnvVars(t *testing.T) {
 	}
 }
 
+func TestParseFlagsVersionEarlyReturn(t *testing.T) {
+	os.Args = []string{"gen-commit-msg", "--version"}
+	os.Setenv("GCM_SUBJECT_COUNT", "100")
+	t.Cleanup(func() { os.Unsetenv("GCM_SUBJECT_COUNT") })
+
+	cfg, err := ParseFlags()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.Version {
+		t.Error("Version should be true when --version flag is set")
+	}
+	if cfg.SubjectCount != 0 {
+		t.Errorf("SubjectCount = %d, want 0 (env should not be read on early return)", cfg.SubjectCount)
+	}
+}
+
 func TestParseFlagsCLIOverridesEnv(t *testing.T) {
 	os.Args = []string{"gen-commit-msg", "--subject-count", "7"}
 	os.Setenv("GCM_SUBJECT_COUNT", "3")

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 
@@ -80,6 +81,7 @@ func getBoolFlagOrEnv(flags *flag.FlagSet, name, envVar string, defaultVal bool)
 	}
 	b, err := strconv.ParseBool(env)
 	if err != nil {
+		slog.Warn("invalid env var value, using default", "env", envVar, "value", env)
 		return defaultVal
 	}
 	return b
@@ -96,6 +98,7 @@ func getUintFlagOrEnv(flags *flag.FlagSet, name, envVar string, defaultVal uint)
 	}
 	n, err := strconv.ParseUint(env, 10, 64)
 	if err != nil {
+		slog.Warn("invalid env var value, using default", "env", envVar, "value", env)
 		return defaultVal
 	}
 	return uint(n)

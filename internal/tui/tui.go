@@ -92,7 +92,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if w < 40 {
 			w = 40
 		}
-		m.list.SetSize(w, msg.Height-2)
+		h := msg.Height - 2
+		if h < 1 {
+			h = 1
+		}
+		m.list.SetSize(w, h)
 		return m, nil
 	case generationResultMsg:
 		if msg.err != nil {
@@ -181,24 +185,8 @@ type commitItemDelegate struct {
 
 func newCommitDelegate() list.ItemDelegate {
 	d := list.NewDefaultDelegate()
-	d.Styles.SelectedTitle = lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder(), false, false, false, true).
-		BorderForeground(lipgloss.Color("205")).
-		Foreground(lipgloss.NoColor{}).
-		Padding(0, 0, 0, 1)
-	d.Styles.SelectedDesc = lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder(), false, false, false, true).
-		BorderForeground(lipgloss.Color("205")).
-		Foreground(lipgloss.NoColor{}).
-		Padding(0, 0, 0, 1)
-	d.Styles.NormalTitle = lipgloss.NewStyle().
-		Foreground(lipgloss.NoColor{}).
-		Padding(0, 0, 0, 1)
-	d.Styles.NormalDesc = lipgloss.NewStyle().
-		Foreground(lipgloss.NoColor{}).
-		Padding(0, 0, 0, 1)
 	d.SetSpacing(0)
-	return d
+	return &commitItemDelegate{DefaultDelegate: d}
 }
 
 func (d commitItemDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {

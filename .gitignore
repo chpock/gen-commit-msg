@@ -33,3 +33,4 @@ go.work.sum
 
 # Worktrees
 .worktrees/
+gen-commit-msg

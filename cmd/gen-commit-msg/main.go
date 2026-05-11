@@ -1,0 +1,197 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/mattn/go-isatty"
+
+	"github.com/chpock/gen-commit-msg/internal/agent"
+	"github.com/chpock/gen-commit-msg/internal/config"
+	"github.com/chpock/gen-commit-msg/internal/git"
+	"github.com/chpock/gen-commit-msg/internal/opencode"
+	"github.com/chpock/gen-commit-msg/internal/server"
+	"github.com/chpock/gen-commit-msg/internal/tui"
+)
+
+var version = "dev"
+
+func main() {
+	cfg, err := config.ParseFlags()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(2)
+	}
+
+	if cfg.Version {
+		fmt.Printf("gen-commit-msg %s\n", version)
+		return
+	}
+
+	if cfg.Help {
+		config.Usage()
+		return
+	}
+
+	if !git.IsRepo() {
+		fmt.Fprintln(os.Stderr, "Error: not a git repository")
+		os.Exit(1)
+	}
+
+	hasStaged, err := git.HasStagedFiles()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	if !hasStaged {
+		return
+	}
+
+	if err := agent.Ensure(cfg.Agent, cfg.InstallAgent); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	isTTY := isTerminal()
+	if !isTTY && cfg.SubjectCount > 1 {
+		fmt.Fprintln(os.Stderr, "Error: --subject-count > 1 requires an interactive terminal. Use --subject-count 1 for non-interactive mode.")
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		cancel()
+	}()
+
+	srv := server.New()
+	baseURL, err := srv.Start(ctx)
+	if err != nil {
+		printServerError(err)
+		os.Exit(1)
+	}
+
+	oc := opencode.NewClient(baseURL)
+	sessionID, err := oc.CreateSession(ctx, cfg.Agent)
+	cleanup := func() {
+		delCtx, delCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer delCancel()
+		oc.DeleteSession(delCtx, sessionID)
+		srv.Stop()
+	}
+	defer cleanup()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, formatOpenCodeError(err))
+		cleanup()
+		os.Exit(1)
+	}
+
+	if !isTTY && cfg.SubjectCount == 1 {
+		messages, err := oc.GenerateMessages(ctx, sessionID, opencode.GenerateParams{
+			SubjectCount: int(cfg.SubjectCount),
+			Body:         cfg.Body,
+		})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, formatOpenCodeError(err))
+			cleanup()
+			os.Exit(1)
+		}
+		if len(messages) > 0 {
+			fmt.Println(formatMessageFromOC(messages[0]))
+		}
+		return
+	}
+
+	if cfg.Quiet && cfg.SubjectCount == 1 {
+		messages, err := oc.GenerateMessages(ctx, sessionID, opencode.GenerateParams{
+			SubjectCount: int(cfg.SubjectCount),
+			Body:         cfg.Body,
+		})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, formatOpenCodeError(err))
+			cleanup()
+			os.Exit(1)
+		}
+		if len(messages) > 0 {
+			fmt.Println(formatMessageFromOC(messages[0]))
+		}
+		return
+	}
+
+	m := tui.NewModel(int(cfg.SubjectCount), cfg.Quiet)
+	p := tea.NewProgram(m)
+
+	go func() {
+		messages, err := oc.GenerateMessages(ctx, sessionID, opencode.GenerateParams{
+			SubjectCount: int(cfg.SubjectCount),
+			Body:         cfg.Body,
+		})
+		if err != nil {
+			p.Send(tui.SetError(err))
+			return
+		}
+		items := make([]tui.CommitItem, len(messages))
+		for i, msg := range messages {
+			items[i] = tui.CommitItem{Subject: msg.Subject, Body: msg.Body}
+		}
+		p.Send(tui.SetMessages(items))
+	}()
+
+	finalModel, err := p.Run()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: TUI initialization failed: %v\n", err)
+		cleanup()
+		os.Exit(1)
+	}
+
+	m = finalModel.(tui.Model)
+	fmt.Println(m.SelectedMessage())
+
+	if cfg.Pause == "on" && m.Error() == nil {
+		fmt.Fprintf(os.Stderr, "\nPress any key to exit...")
+		if isTTY {
+			buf := make([]byte, 1)
+			os.Stdin.Read(buf)
+		}
+		fmt.Fprintln(os.Stderr)
+	}
+}
+
+func isTerminal() bool {
+	return isatty.IsTerminal(os.Stdout.Fd())
+}
+
+func formatMessageFromOC(msg opencode.CommitMessage) string {
+	if msg.Body == "" {
+		return strings.TrimSpace(msg.Subject)
+	}
+	return strings.TrimSpace(msg.Subject) + "\n\n" + strings.TrimSpace(msg.Body)
+}
+
+func printServerError(err error) {
+	switch {
+	case errors.Is(err, server.ErrOpenCodeNotFound):
+		fmt.Fprintln(os.Stderr, "Error: opencode not found. Is it installed?")
+	case errors.Is(err, server.ErrServerTimeout):
+		fmt.Fprintln(os.Stderr, "Error: opencode server failed to start (no response after 30s)")
+	case errors.Is(err, server.ErrServerExited):
+		fmt.Fprintln(os.Stderr, "Error: opencode server exited unexpectedly")
+	default:
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	}
+}
+
+func formatOpenCodeError(err error) string {
+	return fmt.Sprintf("Error: failed to generate commit message: %v", err)
+}

@@ -22,12 +22,7 @@ Rules:
 func agentsDir() string {
 	base := os.Getenv("XDG_CONFIG_HOME")
 	if base == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			base = os.Getenv("HOME")
-		} else {
-			base = home
-		}
+		base, _ = os.UserConfigDir()
 	}
 	if base == "" {
 		return ""
@@ -57,5 +52,8 @@ func Ensure(name, installMode string) error {
 		return fmt.Errorf("create agents directory: %w", err)
 	}
 
-	return os.WriteFile(filePath, []byte(DefaultPrompt), 0644)
+	if err := os.WriteFile(filePath, []byte(DefaultPrompt), 0644); err != nil {
+		return fmt.Errorf("write agent file: %w", err)
+	}
+	return nil
 }

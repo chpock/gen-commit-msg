@@ -3,6 +3,7 @@ package agent
 import (
 	_ "embed"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -23,6 +24,7 @@ func agentsDir() string {
 
 func Ensure(name, installMode string) error {
 	if installMode == "no" {
+		slog.Debug("agent install skipped", "mode", installMode)
 		return nil
 	}
 
@@ -35,15 +37,19 @@ func Ensure(name, installMode string) error {
 
 	if installMode == "if-not-exists" {
 		if _, err := os.Stat(filePath); err == nil {
-			return nil // already exists
+			slog.Debug("agent file already exists", "path", filePath)
+			return nil
 		}
 	}
 
+	slog.Info("installing agent file", "agent", name, "path", filePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
+		slog.Error("failed to create agents directory", "dir", dir, "error", err)
 		return fmt.Errorf("create agents directory: %w", err)
 	}
 
 	if err := os.WriteFile(filePath, []byte(DefaultPrompt), 0644); err != nil {
+		slog.Error("failed to write agent file", "path", filePath, "error", err)
 		return fmt.Errorf("write agent file: %w", err)
 	}
 	return nil

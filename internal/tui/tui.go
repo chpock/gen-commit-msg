@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -105,13 +106,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case generationResultMsg:
 		if msg.err != nil {
+			slog.Error("generation failed", "error", msg.err)
 			m.err = msg.err
 			m.state = stateError
 			return m, nil
 		}
+		slog.Debug("received messages", "count", len(msg.messages))
 		m.messages = msg.messages
 		switch len(m.messages) {
 		case 0:
+			slog.Warn("no commit messages generated")
 			m.err = fmt.Errorf("no commit messages generated")
 			m.state = stateError
 			return m, nil
@@ -125,6 +129,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.list.SetItems(items)
 			m.state = stateResult
+			slog.Debug("switched to result state", "item_count", len(items))
 			return m, nil
 		}
 	}
@@ -221,7 +226,7 @@ func (d commitItemDelegate) Render(w io.Writer, m list.Model, index int, item li
 
 	s := titleStyle.Render(prefix + ci.Subject)
 	if ci.Body != "" {
-		s += "\n" + descStyle.Render("    " + ci.Body)
+		s += "\n" + descStyle.Render("    "+ci.Body)
 	}
 	fmt.Fprint(w, s)
 }

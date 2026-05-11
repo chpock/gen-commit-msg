@@ -38,12 +38,14 @@ func ParseFlags() (*Config, error) {
 	flags.BoolP("help", "h", false, "print help and exit")
 
 	if err := flags.Parse(os.Args[1:]); err != nil {
+		slog.Error("failed to parse flags", "error", err)
 		return nil, fmt.Errorf("parse flags: %w", err)
 	}
 
 	cfg.Version, _ = flags.GetBool("version")
 	cfg.Help, _ = flags.GetBool("help")
 	if cfg.Version || cfg.Help {
+		slog.Debug("version or help flag set, skipping config resolution")
 		return cfg, nil
 	}
 
@@ -62,21 +64,26 @@ func ParseFlags() (*Config, error) {
 func getStringFlagOrEnv(flags *flag.FlagSet, name, envVar, defaultVal string) string {
 	val, _ := flags.GetString(name)
 	if flags.Changed(name) {
+		slog.Debug("config resolved from flag", "name", name, "value", val)
 		return val
 	}
 	if env := os.Getenv(envVar); env != "" {
+		slog.Debug("config resolved from env", "name", name, "env", envVar, "value", env)
 		return env
 	}
+	slog.Debug("config resolved from default", "name", name, "value", defaultVal)
 	return defaultVal
 }
 
 func getBoolFlagOrEnv(flags *flag.FlagSet, name, envVar string, defaultVal bool) bool {
 	val, _ := flags.GetBool(name)
 	if flags.Changed(name) {
+		slog.Debug("config resolved from flag", "name", name, "value", val)
 		return val
 	}
 	env := os.Getenv(envVar)
 	if env == "" {
+		slog.Debug("config resolved from default", "name", name, "value", defaultVal)
 		return defaultVal
 	}
 	b, err := strconv.ParseBool(env)
@@ -84,6 +91,7 @@ func getBoolFlagOrEnv(flags *flag.FlagSet, name, envVar string, defaultVal bool)
 		slog.Warn("invalid env var value, using default", "env", envVar, "value", env)
 		return defaultVal
 	}
+	slog.Debug("config resolved from env", "name", name, "env", envVar, "value", b)
 	return b
 }
 
@@ -109,10 +117,12 @@ func Usage() {
 func getUintFlagOrEnv(flags *flag.FlagSet, name, envVar string, defaultVal uint) uint {
 	val, _ := flags.GetUint(name)
 	if flags.Changed(name) {
+		slog.Debug("config resolved from flag", "name", name, "value", val)
 		return val
 	}
 	env := os.Getenv(envVar)
 	if env == "" {
+		slog.Debug("config resolved from default", "name", name, "value", defaultVal)
 		return defaultVal
 	}
 	n, err := strconv.ParseUint(env, 10, 64)
@@ -120,5 +130,6 @@ func getUintFlagOrEnv(flags *flag.FlagSet, name, envVar string, defaultVal uint)
 		slog.Warn("invalid env var value, using default", "env", envVar, "value", env)
 		return defaultVal
 	}
+	slog.Debug("config resolved from env", "name", name, "env", envVar, "value", n)
 	return uint(n)
 }

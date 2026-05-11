@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os/exec"
@@ -49,8 +50,11 @@ func (s *ProcessServer) Start(ctx context.Context) (string, error) {
 		Setpgid:   true,
 	}
 
+	slog.Info("starting opencode server", "args", s.cmd.Args[1:])
+
 	stdout, err := s.cmd.StdoutPipe()
 	if err != nil {
+		slog.Error("failed to create stdout pipe", "error", err)
 		cancel()
 		return "", fmt.Errorf("stdout pipe: %w", err)
 	}
@@ -58,6 +62,7 @@ func (s *ProcessServer) Start(ctx context.Context) (string, error) {
 	s.cmd.Stderr = &stderrBuf
 
 	if err := s.cmd.Start(); err != nil {
+		slog.Error("failed to start opencode process", "error", err)
 		cancel()
 		if errors.Is(err, exec.ErrNotFound) {
 			return "", fmt.Errorf("%w: %w", ErrOpenCodeNotFound, err)
@@ -67,19 +72,24 @@ func (s *ProcessServer) Start(ctx context.Context) (string, error) {
 
 	baseURL, err := parseListenURL(stdout, 30*time.Second)
 	if err != nil {
+		slog.Error("failed to parse listen URL", "error", err)
 		s.Stop()
 		if stderrBuf.Len() > 0 {
+			slog.Debug("opencode stderr", "output", stderrBuf.String())
 			return "", fmt.Errorf("parse listen URL: %w\nstderr: %s", err, stderrBuf.String())
 		}
 		return "", fmt.Errorf("parse listen URL: %w", err)
 	}
+	slog.Debug("parsed listen URL", "url", baseURL)
 	s.baseURL = baseURL
 
 	if err := healthCheck(ctx, baseURL); err != nil {
+		slog.Error("health check failed", "url", baseURL, "error", err)
 		s.Stop()
 		return "", fmt.Errorf("health check: %w", err)
 	}
 
+	slog.Info("opencode server healthy", "url", baseURL)
 	return baseURL, nil
 }
 
@@ -151,6 +161,7 @@ func checkListen(baseURL string) error {
 }
 
 func (s *ProcessServer) Stop() error {
+	slog.Debug("stopping opencode server")
 	if s.cancel != nil {
 		s.cancel()
 	}
@@ -160,7 +171,9 @@ func (s *ProcessServer) Stop() error {
 		go func() { done <- s.cmd.Wait() }()
 		select {
 		case <-done:
+			slog.Debug("opencode process exited cleanly")
 		case <-time.After(5 * time.Second):
+			slog.Warn("opencode server did not stop gracefully, killing")
 			s.cmd.Process.Kill()
 		}
 	}

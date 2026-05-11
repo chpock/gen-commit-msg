@@ -6,6 +6,8 @@ Surfaces: cli-only
 
 UX spec approved - round 4 - 2026-05-11
 
+design-interrogation skipped - scope: cli-only, UX paths exhaustively covered by 4 deep-discovery passes
+
 ## Surfaces enumerated
 
 | Surface | Type | Purpose |

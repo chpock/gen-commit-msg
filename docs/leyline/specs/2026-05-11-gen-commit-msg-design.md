@@ -6,6 +6,8 @@ Surfaces: cli-only
 
 Product spec approved - round 4 - 2026-05-11
 
+Deep-discovery pass complete - round 4 - 2026-05-11
+
 ## Problem
 
 Generating high-quality git commit messages manually is tedious. opencode can generate them from the git diff, but there is no convenient CLI tool that manages the opencode server lifecycle, configures a dedicated agent, and provides an interactive TUI for selecting among generated variants.

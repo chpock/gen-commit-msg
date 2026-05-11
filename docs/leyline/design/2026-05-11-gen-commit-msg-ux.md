@@ -4,7 +4,7 @@ Date: 2026-05-11
 Product spec: docs/leyline/specs/2026-05-11-gen-commit-msg-design.md
 Surfaces: cli-only
 
-UX spec approved - round 2 - 2026-05-11
+UX spec approved - round 3 - 2026-05-11
 
 ## Surfaces enumerated
 
@@ -79,13 +79,25 @@ Failure paths:
 3. Exit 0
 4. No server started, no TUI.
 
-### Flow 6 — No TTY with `--subject-count > 1`
+### Flow 6 — No TTY
+
+**Case A: `--subject-count > 1`**
 
 1. User runs `gen-commit-msg` in a non-TTY context (CI, pipe, `$TERM=dumb`) with default `--subject-count 5`
 2. Tool detects non-TTY before starting server
 3. `Error: --subject-count > 1 requires an interactive terminal. Use --subject-count 1 for non-interactive mode.` → stderr
 4. Exit 1
 5. No server started, no TUI.
+
+**Case B: `--subject-count 1`**
+
+1. User runs `gen-commit-msg --subject-count 1` in a non-TTY context
+2. Tool checks staged files, starts server silently (no progress output)
+3. Creates session, sends prompt, waits for response
+4. Result printed to stdout
+5. Session deleted, server stopped
+6. Exit 0
+7. No TUI, no progress messages. `--quiet` is a no-op in this mode (nothing to suppress).
 
 ## State matrix
 

@@ -4,7 +4,7 @@ Date: 2026-05-11
 Author: chpock
 Surfaces: cli-only
 
-Product spec approved - round 2 - 2026-05-11
+Product spec approved - round 3 - 2026-05-11
 
 ## Problem
 
@@ -13,14 +13,16 @@ Generating high-quality git commit messages manually is tedious. opencode can ge
 ## Goals
 
 - Check for staged git changes; if none — exit immediately with no action
-- Start `opencode serve --hostname 127.0.0.1 --port 0`, parse stdout for a line matching `opencode server listening on http://127.0.0.1:<port>` with a 30-second timeout, and guarantee shutdown on exit (SIGTERM/SIGINT)
-- Idempotently create an agent `.md` file at `${XDG_CONFIG_HOME:-$HOME/.config}/opencode/agents/gen-commit-msg.md`
+- Start `opencode serve --hostname 127.0.0.1 --port 0`, parse stdout for a line matching `opencode server listening on http://127.0.0.1:<port>` with a 30-second timeout, then issue a lightweight API request to confirm the server is ready before proceeding. On parse failure, include the actual server output in the error message.
+- Set `Pdeathsig: syscall.SIGKILL` on the opencode child process so the server dies with the parent even if cleanup code cannot run
+- On any exit path (success or error), delete the opencode session and shut down the server in a `defer` block with a 5-second timeout. SIGKILL session leaks are an accepted risk
+- Idempotently create an agent `.md` file at `${XDG_CONFIG_HOME:-$HOME/.config}/opencode/agents/<agent-name>.md` (the agent name comes from `--agent`, default `gen-commit-msg`)
 - Create an opencode session and prompt it to generate commit messages, passing `--subject-count` and `--body` as prompt parameters (opencode accesses the git diff on its own)
 - Delete the session and shut down the opencode server process after completion
 - Display a TUI with a spinner during generation, then an interactive list of variants (subject + optional body)
 - On user selection, output the chosen message to stdout
 - Configurable via CLI flags and environment variables with clear precedence (flag > env > default)
-- Autodetect non-TTY context: if not a terminal and `--subject-count > 1`, error with a message suggesting `--subject-count 1`
+- Autodetect non-TTY context: if not a terminal and `--subject-count > 1`, error with a message suggesting `--subject-count 1`. If not a terminal and `--subject-count 1`, run generation silently and print the result to stdout — no TUI, no progress output
 
 ## Non-goals
 
@@ -36,7 +38,7 @@ Generating high-quality git commit messages manually is tedious. opencode can ge
 - Go 1.22+
 - `opencode` CLI must be installed and on `PATH`
 - Must run inside a git repository
-- Dependencies: `github.com/sst/opencode-sdk-go` v0.19.2, `github.com/charmbracelet/bubbletea` + `bubbles/spinner`
+- Dependencies: `github.com/sst/opencode-sdk-go` (latest version), `github.com/charmbracelet/bubbletea` + `bubbles/spinner`
 - CLI flag parsing via `spf13/pflag`
 - Logging via `log/slog` (stdlib)
 - Module path: `github.com/chpock/gen-commit-msg`
@@ -60,7 +62,7 @@ cmd/gen-commit-msg/main.go   — entry point
 internal/
   server/      — start/stop opencode serve process
   agent/       — create/verify agent .md file
-  git/         — check staged files, get git diff
+  git/         — check git repo and staged files
   opencode/    — API client (Session.New, Prompt, Command)
   tui/         — bubbletea model (steps, message selection)
   config/      — CLI flags and env var parsing
@@ -109,6 +111,13 @@ Server hostname (`127.0.0.1`) and startup timeout (30s) are constants in the `se
 
 `--quiet` suppresses only progress output (server startup messages, request-sending status, spinner). It does NOT suppress the interactive subject selection list when `--subject-count > 1`. It does NOT affect `--pause` behavior.
 
+`--agent <name>` changes the agent file path to `${XDG_CONFIG_HOME:-$HOME/.config}/opencode/agents/<name>.md` and the opencode agent name used in the session.
+
+`--install-agent` behaviors:
+- `if-not-exists` (default): create the agent file with the default prompt only if `<name>.md` does not already exist
+- `always`: always overwrite the agent file with the default prompt
+- `no`: never create or overwrite the agent file. If opencode returns an error about a missing agent, surface it to the user
+
 ## Agent .md prompt
 
 ```
@@ -131,7 +140,9 @@ Rules:
 - Running in a git repo with staged changes: starts server, shows TUI, generates messages
 - Running in a git repo with no staged changes: exits silently
 - `--subject-count 1 --body false`: returns exactly one subject line, no body
-- Server starts within 30s timeout by parsing stdout for the listening URL; guarantees stop on process exit (SIGTERM/SIGINT handled)
-- Agent file is created idempotently (not overwritten if it exists, unless `--install-agent always`)
+- Server starts within 30s timeout by parsing stdout for the listening URL, followed by a lightweight API health-check; server child process has `Pdeathsig: SIGKILL` set
+- Session deletion and server shutdown run in a `defer` block on all exit paths (success and error)
+- Agent file is created idempotently (not overwritten if it exists, unless `--install-agent always`); `--install-agent no` never installs and relies on opencode error for missing agent
 - All flags have corresponding env var overrides with correct precedence
 - Running without a TTY and `--subject-count > 1`: errors with a clear message suggesting `--subject-count 1`
+- Running without a TTY and `--subject-count 1`: generates silently, prints result to stdout, no TUI

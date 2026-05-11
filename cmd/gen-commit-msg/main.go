@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -77,7 +78,7 @@ func main() {
 	srv := server.New()
 	baseURL, err := srv.Start(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		printServerError(err)
 		os.Exit(1)
 	}
 
@@ -91,7 +92,7 @@ func main() {
 	}
 	defer cleanup()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintln(os.Stderr, formatOpenCodeError(err))
 		cleanup()
 		os.Exit(1)
 	}
@@ -102,7 +103,7 @@ func main() {
 			Body:         cfg.Body,
 		})
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Fprintln(os.Stderr, formatOpenCodeError(err))
 			cleanup()
 			os.Exit(1)
 		}
@@ -117,9 +118,9 @@ func main() {
 			SubjectCount: int(cfg.SubjectCount),
 			Body:         cfg.Body,
 		})
-		cleanup()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Fprintln(os.Stderr, formatOpenCodeError(err))
+			cleanup()
 			os.Exit(1)
 		}
 		if len(messages) > 0 {
@@ -149,7 +150,7 @@ func main() {
 
 	finalModel, err := p.Run()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: TUI initialization failed: %v\n", err)
 		cleanup()
 		os.Exit(1)
 	}
@@ -157,7 +158,7 @@ func main() {
 	m = finalModel.(tui.Model)
 	fmt.Println(m.SelectedMessage())
 
-	if cfg.Pause == "on" || (cfg.Pause == "on-error" && m.Error() != nil) {
+	if cfg.Pause == "on" && m.Error() == nil {
 		fmt.Fprintf(os.Stderr, "\nPress any key to exit...")
 		if isTTY {
 			buf := make([]byte, 1)
@@ -176,4 +177,21 @@ func formatMessageFromOC(msg opencode.CommitMessage) string {
 		return strings.TrimSpace(msg.Subject)
 	}
 	return strings.TrimSpace(msg.Subject) + "\n\n" + strings.TrimSpace(msg.Body)
+}
+
+func printServerError(err error) {
+	switch {
+	case errors.Is(err, server.ErrOpenCodeNotFound):
+		fmt.Fprintln(os.Stderr, "Error: opencode not found. Is it installed?")
+	case errors.Is(err, server.ErrServerTimeout):
+		fmt.Fprintln(os.Stderr, "Error: opencode server failed to start (no response after 30s)")
+	case errors.Is(err, server.ErrServerExited):
+		fmt.Fprintln(os.Stderr, "Error: opencode server exited unexpectedly")
+	default:
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	}
+}
+
+func formatOpenCodeError(err error) string {
+	return fmt.Sprintf("Error: failed to generate commit message: %v", err)
 }

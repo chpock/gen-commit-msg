@@ -16,7 +16,13 @@ import (
 	"time"
 )
 
-var listenURLRe = regexp.MustCompile(`opencode server listening on (http://[^\s]+)`)
+var (
+	listenURLRe = regexp.MustCompile(`opencode server listening on (http://[^\s]+)`)
+
+	ErrOpenCodeNotFound = errors.New("opencode not found in PATH")
+	ErrServerTimeout    = errors.New("timed out waiting for opencode listen URL")
+	ErrServerExited     = errors.New("opencode exited without printing listen URL")
+)
 
 type Server interface {
 	Start(ctx context.Context) (baseURL string, err error)
@@ -53,6 +59,9 @@ func (s *ProcessServer) Start(ctx context.Context) (string, error) {
 
 	if err := s.cmd.Start(); err != nil {
 		cancel()
+		if errors.Is(err, exec.ErrNotFound) {
+			return "", fmt.Errorf("%w: %w", ErrOpenCodeNotFound, err)
+		}
 		return "", fmt.Errorf("start opencode: %w", err)
 	}
 
@@ -90,7 +99,7 @@ func parseListenURL(r io.Reader, timeout time.Duration) (string, error) {
 				return
 			}
 		}
-		errCh <- fmt.Errorf("opencode exited without printing listen URL. Output:\n%s", output.String())
+		errCh <- fmt.Errorf("%w. Output:\n%s", ErrServerExited, output.String())
 	}()
 
 	select {
@@ -99,7 +108,7 @@ func parseListenURL(r io.Reader, timeout time.Duration) (string, error) {
 	case err := <-errCh:
 		return "", err
 	case <-time.After(timeout):
-		return "", errors.New("timed out waiting for opencode listen URL")
+		return "", ErrServerTimeout
 	}
 }
 

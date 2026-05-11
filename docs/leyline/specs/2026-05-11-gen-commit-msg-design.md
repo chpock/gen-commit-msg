@@ -4,7 +4,7 @@ Date: 2026-05-11
 Author: chpock
 Surfaces: cli-only
 
-Product spec approved - round 1 - 2026-05-11
+Product spec approved - round 2 - 2026-05-11
 
 ## Problem
 
@@ -13,13 +13,14 @@ Generating high-quality git commit messages manually is tedious. opencode can ge
 ## Goals
 
 - Check for staged git changes; if none — exit immediately with no action
-- Start a local `opencode serve` process on a random port, wait for readiness, and guarantee shutdown on exit (SIGTERM/SIGINT)
+- Start `opencode serve --hostname 127.0.0.1 --port 0`, parse stdout for a line matching `opencode server listening on http://127.0.0.1:<port>` with a 30-second timeout, and guarantee shutdown on exit (SIGTERM/SIGINT)
 - Idempotently create an agent `.md` file at `${XDG_CONFIG_HOME:-$HOME/.config}/opencode/agents/gen-commit-msg.md`
-- Create an opencode session and prompt it to generate commit messages (opencode accesses the git diff on its own)
+- Create an opencode session and prompt it to generate commit messages, passing `--subject-count` and `--body` as prompt parameters (opencode accesses the git diff on its own)
 - Delete the session and shut down the opencode server process after completion
 - Display a TUI with a spinner during generation, then an interactive list of variants (subject + optional body)
 - On user selection, output the chosen message to stdout
 - Configurable via CLI flags and environment variables with clear precedence (flag > env > default)
+- Autodetect non-TTY context: if not a terminal and `--subject-count > 1`, error with a message suggesting `--subject-count 1`
 
 ## Non-goals
 
@@ -28,6 +29,7 @@ Generating high-quality git commit messages manually is tedious. opencode can ge
 - No writing to `.git/COMMIT_EDITMSG` (output to stdout only)
 - No config file support (.env, yaml, toml, etc.)
 - No git hook integration
+- No automatic diff passing to opencode; the tool relies on opencode's built-in git diff access and passes only prompt parameters
 
 ## Constraints
 
@@ -98,10 +100,14 @@ Priority: CLI flag > env var > default.
 | `--log-file` | | `GCM_LOG_FILE` | path, `-` for stdout | (stderr) | Log output destination |
 | `--subject-count` | `-n` | `GCM_SUBJECT_COUNT` | 1..N | 5 | Number of subject line variants to request |
 | `--body` | | `GCM_BODY` | true, false | true | Whether to generate message body |
-| `--quiet` | `-q` | `GCM_QUIET` | true, false | false | Suppress TUI (output result directly) |
+| `--quiet` | `-q` | `GCM_QUIET` | true, false | false | Suppress progress messages and spinner (not the selection list) |
 | `--agent` | `-a` | `GCM_AGENT` | string | gen-commit-msg | opencode agent name |
 | `--pause` | | `GCM_PAUSE` | on, off, on-error | on-error | Pause before exit behavior |
 | `--install-agent` | | `GCM_INSTALL_AGENT` | always, if-not-exists, no | if-not-exists | Agent installation behavior |
+
+Server hostname (`127.0.0.1`) and startup timeout (30s) are constants in the `server` package — not exposed as flags.
+
+`--quiet` suppresses only progress output (server startup messages, request-sending status, spinner). It does NOT suppress the interactive subject selection list when `--subject-count > 1`. It does NOT affect `--pause` behavior.
 
 ## Agent .md prompt
 
@@ -124,8 +130,8 @@ Rules:
 - `go build ./cmd/gen-commit-msg` produces a working binary
 - Running in a git repo with staged changes: starts server, shows TUI, generates messages
 - Running in a git repo with no staged changes: exits silently
-- `--quiet` flag: skips TUI, outputs result to stdout
 - `--subject-count 1 --body false`: returns exactly one subject line, no body
-- Server is guaranteed to stop on process exit (SIGTERM/SIGINT handled)
+- Server starts within 30s timeout by parsing stdout for the listening URL; guarantees stop on process exit (SIGTERM/SIGINT handled)
 - Agent file is created idempotently (not overwritten if it exists, unless `--install-agent always`)
 - All flags have corresponding env var overrides with correct precedence
+- Running without a TTY and `--subject-count > 1`: errors with a clear message suggesting `--subject-count 1`

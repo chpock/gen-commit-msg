@@ -4,7 +4,7 @@ Date: 2026-05-11
 Product spec: docs/leyline/specs/2026-05-11-gen-commit-msg-design.md
 Surfaces: cli-only
 
-UX spec approved - round 1 - 2026-05-11
+UX spec approved - round 2 - 2026-05-11
 
 ## Surfaces enumerated
 
@@ -37,22 +37,25 @@ UX spec approved - round 1 - 2026-05-11
 13. Exit 0
 
 Failure paths:
-- **Not in git repo**: `Error: not a git repository` → stderr, exit 1. No TUI.
-- **No staged files**: silent exit 0. No TUI, no output.
-- **opencode not found**: `Error: opencode not found. Is it installed?` → stderr, exit 1. No TUI.
-- **Server fails to start**: `Error: opencode server failed to start` → stderr, exit 1. TUI may show error state.
-- **Generation fails (API error)**: `Error: failed to generate commit message` → stderr, exit 1. TUI shows error state.
-- **Generation returns empty**: `Error: no commit messages generated` → stderr, exit 1.
+- **Not in git repo**: `Error: not a git repository` → stderr, exit 1
+- **No staged files**: silent exit 0
+- **opencode not found**: `Error: opencode not found. Is it installed?` → stderr, exit 1
+- **Server fails to start (timeout)**: `Error: opencode server failed to start (no response after 30s)` → stderr, exit 1
+- **Server fails to start (process exited)**: `Error: opencode server exited unexpectedly (exit code <N>)` → stderr, exit 1
+- **Generation fails (auth)**: `Error: opencode returned 401 — is opencode authenticated?` → stderr, exit 1
+- **Generation fails (timeout)**: `Error: request timed out after 60s` → stderr, exit 1
+- **Generation fails (other API error)**: `Error: opencode returned <status>: <message>` → stderr, exit 1
+- **Generation returns empty**: `Error: no commit messages generated` → stderr, exit 1
 
 ### Flow 2 — Quiet mode (`--quiet`)
 
 1. User runs `gen-commit-msg --quiet`
-2. Same server lifecycle as Flow 1, but no TUI rendered
-3. If `--subject-count 1 --body false`: single subject line printed to stdout
-4. Otherwise: first variant printed to stdout
+2. Progress messages (server startup, request sending) and spinner are suppressed
+3. If `--subject-count > 1`: interactive selection list is shown normally (quiet does not suppress it)
+4. If `--subject-count 1`: result prints to stdout directly
 5. Server stopped, session deleted
-6. Exit 0 (or error exit as above)
-7. If `--pause on`: `Press any key to exit...` printed to stderr
+6. `--pause` behaves identically to non-quiet mode
+7. Exit 0 (or error exit as in Flow 1)
 
 ### Flow 3 — Single variant, no body (`--subject-count 1 --body false`)
 
@@ -76,17 +79,25 @@ Failure paths:
 3. Exit 0
 4. No server started, no TUI.
 
+### Flow 6 — No TTY with `--subject-count > 1`
+
+1. User runs `gen-commit-msg` in a non-TTY context (CI, pipe, `$TERM=dumb`) with default `--subject-count 5`
+2. Tool detects non-TTY before starting server
+3. `Error: --subject-count > 1 requires an interactive terminal. Use --subject-count 1 for non-interactive mode.` → stderr
+4. Exit 1
+5. No server started, no TUI.
+
 ## State matrix
 
-| Surface | Empty | Loading | Error | Success |
-|---------|-------|---------|-------|---------|
-| CLI entry (no server/TUI) | No staged files: silent exit 0 | N/A — loading triggers TUI | Error on stderr, exit 1 | Version/help: text on stdout, exit 0 |
-| TUI: spinner | N/A — only shown during loading | `Generating commit messages...` ⠋ | `Error: <msg>` shown, pause overlay if configured | Transition to result list |
-| TUI: result list | N/A — would be error state (no results) | N/A — loading shown by spinner | `Error: <msg>` | List of variants with `>` selection cursor |
-| TUI: pause overlay | N/A | N/A | `Press any key to exit...` | `Press any key to exit...` (if `--pause on`) |
-| stdout | N/A — empty success exits silently | N/A | N/A | Commit message text, no framing |
-| stderr | N/A | N/A | `Error: <message>` | N/A (or log output if configured) |
-| Log file | N/A | `{"time":"...","level":"INFO","msg":"starting server"}` | `{"time":"...","level":"ERROR","msg":"..."}` | `{"time":"...","level":"INFO","msg":"done"}` |
+| Surface | Empty | Loading | Error | Timeout | Success |
+|---------|-------|---------|-------|---------|---------|
+| CLI entry (no server/TUI) | No staged files: silent exit 0 | N/A — loading triggers TUI | Error on stderr, exit 1 | N/A | Version/help: text on stdout, exit 0 |
+| TUI: spinner | N/A — only shown during loading | `Generating commit messages...` ⠋ | `Error: <msg>` shown, pause overlay if configured | `Error: opencode server failed to start (no response after 30s)` | Transition to result list |
+| TUI: result list | N/A — would be error state (no results) | N/A — loading shown by spinner | `Error: <msg>` | N/A | List of variants with `>` selection cursor |
+| TUI: pause overlay | N/A | N/A | `Press any key to exit...` | N/A | `Press any key to exit...` (if `--pause on`) |
+| stdout | N/A — empty success exits silently | N/A | N/A | N/A | Commit message text, no framing |
+| stderr | N/A | N/A | `Error: <message>` | `Error: <message>` | N/A (or log output if configured) |
+| Log file | N/A | `{"time":"...","level":"INFO","msg":"starting server"}` | `{"time":"...","level":"ERROR","msg":"..."}` | `{"time":"...","level":"WARN","msg":"server readiness timeout"}` | `{"time":"...","level":"INFO","msg":"done"}` |
 
 ## Voice and tone
 

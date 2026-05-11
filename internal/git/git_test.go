@@ -1,6 +1,7 @@
 package git
 
 import (
+	"os"
 	"testing"
 )
 
@@ -11,5 +12,30 @@ func TestIsRepo(t *testing.T) {
 }
 
 func TestIsRepoOutside(t *testing.T) {
-	t.Skip("requires non-git directory")
+	oldCWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd failed: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(oldCWD); err != nil {
+			t.Fatalf("failed to restore CWD: %v", err)
+		}
+	}()
+
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("os.Chdir to temp dir failed: %v", err)
+	}
+
+	if IsRepo() {
+		t.Error("IsRepo() returned true, but we are outside a git repo")
+	}
+}
+
+func TestHasStagedFiles(t *testing.T) {
+	has, err := HasStagedFiles()
+	if err != nil {
+		t.Fatalf("HasStagedFiles() returned error: %v", err)
+	}
+	t.Logf("HasStagedFiles() = %v", has)
 }

@@ -9,7 +9,7 @@ make vet        # go vet ./...
 make lint       # golangci-lint run ./...  (requires golangci-lint)
 make fmt        # go fmt ./...
 make clean      # rm -f gen-commit-msg
-make all        # fmt → vet → test → build  (correct pre-commit order)
+make all        # fmt → vet → lint → test → build  (correct pre-commit order)
 ```
 
 ## Architecture
@@ -42,6 +42,10 @@ Standard Go tests, no external services needed. Run a single package:
 ```
 go test -count=1 -race ./internal/config/
 ```
+
+## Post-change checks
+
+After every code modification, run `make all` (fmt → vet → lint → test → build). All checks must pass before considering the change complete. If any check fails, fix the issue and re-run until clean.
 
 ## Language
 

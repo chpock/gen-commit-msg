@@ -23,4 +23,4 @@ fmt:
 clean:
 	rm -f $(BINARY)
 
-all: fmt vet test build
+all: fmt vet lint test build

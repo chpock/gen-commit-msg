@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	opencode "github.com/sst/opencode-sdk-go"
@@ -35,8 +36,13 @@ func NewClient(baseURL string) *Client {
 
 func (c *Client) CreateSession(ctx context.Context, agentName string) (string, error) {
 	slog.Debug("creating session", "agent", agentName)
+	pwd, err := os.Getwd()
+	if err != nil {
+		slog.Warn("failed to get current directory for session", "error", err)
+	}
 	session, err := c.sdkClient.Session.New(ctx, opencode.SessionNewParams{
-		Title: opencode.String(agentName),
+		Directory: opencode.F(pwd),
+		Title:     opencode.String(agentName),
 	})
 	if err != nil {
 		slog.Error("failed to create session", "agent", agentName, "error", err)

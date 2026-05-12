@@ -3,7 +3,7 @@ Date: 2026-05-12
 Product spec: docs/leyline/specs/2026-05-12-progress-view-design.md
 Surfaces: single-screen-ui
 
-UX spec approved - round 1 - 2026-05-12
+UX spec approved - round 2 - 2026-05-12
 
 ## Surfaces enumerated
 - **Progress view**: Vertical list of 5 steps with status indicators (pending/running/done/failed). Shown immediately when TUI starts, before message selection.
@@ -26,16 +26,18 @@ UX spec approved - round 1 - 2026-05-12
 2. A step transitions: pending → running → failed (✗)
 3. Error message appears below the step list
 4. Remaining pending steps stay dimmed (no further execution)
-5. User presses any key → program exits with error code 1
-6. Cleanup (session delete, server stop) runs silently during exit
+5. User presses any key → TUI exits
+6. After TUI exits, main.go runs cleanup (session delete, server stop) with a timeout
+7. Program exits with error code 1
 
 ### Flow 3 — Generation failure (step 3)
 1. Steps 1-2 complete successfully (✓)
 2. Step 3 transitions: running → failed (✗)
 3. Error message appears below the step list
-4. Steps 4-5 stay dimmed as pending
-5. User presses any key → program exits with error code 1
-6. Cleanup (session delete, server stop) runs silently
+4. Steps 4-5 stay dimmed as pending (never executed in TUI)
+5. User presses any key → TUI exits
+6. After TUI exits, main.go runs cleanup (session delete, server stop) with a timeout
+7. Program exits with error code 1
 
 ## State matrix
 
@@ -49,7 +51,9 @@ Permission-denied, Offline: N/A — local CLI tool, no network auth required.
 
 ## Voice and tone
 Three reference strings:
-- **Error**: `Error: opencode server failed to start (no response after 30s)`
+- **Error (step 1)**: `Error: opencode server failed to start: connection refused`
+- **Error (step 2)**: `Error: failed to create session: request timeout`
+- **Error (step 3)**: `Error: failed to generate commit messages: context canceled`
 - **Success**: *(silent — selected message is printed to stdout; no success banner)*
 - **Empty state**: `Error: no commit messages generated`
 
@@ -58,7 +62,7 @@ Voice is direct, technical, English-only. No emoji, no exclamation marks, no per
 ## Accessibility targets
 - **WCAG level**: N/A (terminal TUI — text-based by nature; color independence is the primary concern)
 - **Keyboard flow**: Ctrl+C / Esc exits at any point. ↑↓ to navigate message list. Enter to select. Any key to dismiss error.
-- **Screen reader**: Step labels are plain text; status indicators (✓ / ✗) are ASCII characters readable by screen readers.
+- **Screen reader**: Step labels are plain text; status indicators (✓ / ✗) are Unicode characters readable by most screen readers. If the terminal does not support Unicode, fall back to `[OK]` for done and `[FAIL]` for failed — both are ASCII-safe.
 - **Motion**: Single spinner character updates — already minimal motion. No animations beyond spinner tick.
 - **Color independence**: Status is conveyed by characters (✓, ✗, dimming) not color alone. The spinner is positional — no color dependency.
 

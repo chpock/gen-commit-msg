@@ -15,7 +15,8 @@ import (
 type state int
 
 const (
-	stateSpinner state = iota
+	stateProgress state = iota
+	stateSpinner
 	stateResult
 	stateError
 )
@@ -72,6 +73,8 @@ type Model struct {
 	quiet        bool
 	width        int
 	height       int
+	steps        []stepItem
+	stepDetail   string
 	logPath      string
 }
 
@@ -86,10 +89,17 @@ func NewModel(subjectCount int, quiet bool) Model {
 	l.SetFilteringEnabled(false)
 	l.DisableQuitKeybindings()
 
+	labels := stepLabels()
+	steps := make([]stepItem, 5)
+	for i := range steps {
+		steps[i] = stepItem{label: labels[i], status: StepPending}
+	}
+
 	return Model{
-		state:        stateSpinner,
+		state:        stateProgress,
 		spinner:      s,
 		list:         l,
+		steps:        steps,
 		subjectCount: subjectCount,
 		quiet:        quiet,
 	}
@@ -104,7 +114,10 @@ func (m Model) Init() tea.Cmd {
 	if m.quiet {
 		return nil
 	}
-	return m.spinner.Tick
+	if m.state == stateProgress {
+		return m.spinner.Tick
+	}
+	return nil
 }
 
 func SetMessages(messages []CommitItem) tea.Msg {
@@ -119,6 +132,8 @@ type setLogPathMsg struct {
 	path string
 }
 
+type allStepsDoneMsg struct{}
+
 func SetLogPath(path string) tea.Msg {
 	return setLogPathMsg{path: path}
 }
@@ -126,6 +141,14 @@ func SetLogPath(path string) tea.Msg {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.state == stateProgress {
+			for _, s := range m.steps {
+				if s.status == StepFailed {
+					m.quitting = true
+					return m, tea.Quit
+				}
+			}
+		}
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			m.quitting = true
@@ -172,6 +195,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			slog.Debug("switched to result state", "item_count", len(items))
 			return m, nil
 		}
+	case setLogPathMsg:
+		m.logPath = msg.path
+		return m, nil
+	case StepUpdateMsg:
+		if m.state == stateProgress {
+			if msg.Index >= 0 && msg.Index < len(m.steps) {
+				m.steps[msg.Index].status = msg.Status
+			}
+			m.stepDetail = msg.Detail
+			if msg.Status == StepFailed || msg.Status == StepWarning {
+				return m, nil
+			}
+			return m, m.spinner.Tick
+		}
+	case allStepsDoneMsg:
+		if m.state == stateProgress {
+			m.state = stateResult
+			return m, nil
+		}
 	}
 
 	switch m.state {
@@ -207,6 +249,38 @@ func formatMessage(item CommitItem) string {
 
 func (m Model) View() string {
 	switch m.state {
+	case stateProgress:
+		if m.quiet {
+			return ""
+		}
+		var b strings.Builder
+		for _, s := range m.steps {
+			b.WriteString("\n  ")
+			switch s.status {
+			case StepPending:
+				b.WriteString("  ")
+			case StepRunning:
+				b.WriteString(m.spinner.View())
+			case StepDone:
+				b.WriteString("✓")
+			case StepFailed:
+				b.WriteString("✗")
+			case StepWarning:
+				b.WriteString("⚠")
+			}
+			b.WriteString(" ")
+			b.WriteString(s.label)
+		}
+		if m.stepDetail != "" {
+			b.WriteString("\n\n  ")
+			b.WriteString(m.stepDetail)
+		}
+		if m.logPath != "" {
+			b.WriteString("\n  Details: ")
+			b.WriteString(m.logPath)
+		}
+		b.WriteString("\n")
+		return b.String()
 	case stateSpinner:
 		if m.quiet {
 			return ""

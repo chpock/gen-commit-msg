@@ -42,6 +42,21 @@ func main() {
 		"quiet", cfg.Quiet, "agent", cfg.Agent, "log_level", cfg.LogLevel,
 		"log_file", cfg.LogFile, "pause", cfg.Pause, "install_agent", cfg.InstallAgent)
 
+	isTTY := isTerminal()
+	slog.Debug("terminal check", "is_tty", isTTY)
+
+	pauseExit := func(code int, isError bool) {
+		shouldPause := cfg.Pause == "on" || (isError && cfg.Pause == "on-error")
+		if shouldPause {
+			pauseMsg := "Press Enter to exit..."
+			if isError {
+				pauseMsg = "An error occurred. Press Enter to exit..."
+			}
+			pauseWithEnter(isTTY, pauseMsg)
+		}
+		os.Exit(code)
+	}
+
 	if cfg.Version {
 		fmt.Printf("gen-commit-msg %s\n", version)
 		return
@@ -55,14 +70,14 @@ func main() {
 	if !git.IsRepo() {
 		slog.Error("not a git repository")
 		fmt.Fprintln(os.Stderr, "Error: not a git repository")
-		os.Exit(1)
+		pauseExit(1, true)
 	}
 
 	hasStaged, err := git.HasStagedFiles()
 	if err != nil {
 		slog.Error("failed to check staged files", "error", err)
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		pauseExit(1, true)
 	}
 	if !hasStaged {
 		slog.Info("no staged files, exiting")
@@ -73,17 +88,14 @@ func main() {
 	if err != nil {
 		slog.Error("failed to get current directory", "error", err)
 		fmt.Fprintln(os.Stderr, "Error: failed to get current directory: "+err.Error())
-		os.Exit(1)
+		pauseExit(1, true)
 	}
 	slog.Debug("repository directory", "dir", repoDir)
-
-	isTTY := isTerminal()
-	slog.Debug("terminal check", "is_tty", isTTY)
 	if !isTTY && cfg.SubjectCount > 1 {
 		slog.Error("non-TTY with subject count > 1",
 			"subject_count", cfg.SubjectCount, "is_tty", isTTY)
 		fmt.Fprintln(os.Stderr, "Error: --subject-count > 1 requires an interactive terminal. Use --subject-count 1 for non-interactive mode.")
-		os.Exit(1)
+		pauseExit(1, true)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -219,30 +231,27 @@ func main() {
 			slog.Error("TUI initialization failed", "error", err)
 			fmt.Fprintf(os.Stderr, "Error: TUI initialization failed: %v\n", err)
 			closeTTY()
-			os.Exit(1)
+			pauseExit(1, true)
 		}
 
 		m = finalModel.(tui.Model)
 		if m.Error() != nil {
 			slog.Error("TUI ended with error", "error", m.Error())
 			fmt.Fprintln(os.Stderr, m.Error().Error())
-			os.Exit(1)
+			pauseExit(1, true)
 		}
 		selected := m.SelectedMessage()
 		slog.Info("message selected", "message", truncateString(selected, 80))
 		fmt.Println(selected)
 
-		if cfg.Pause == "on" {
-			pause(isTTY)
-		}
-		return
+		pauseExit(0, false)
 	}
 
 	// Ensure agent prompt file exists.
 	if err := agent.Ensure(cfg.Agent, cfg.InstallAgent); err != nil {
 		slog.Error("failed to ensure agent", "error", err)
 		fmt.Fprintln(os.Stderr, "Error: failed to ensure agent: "+err.Error())
-		os.Exit(1)
+		pauseExit(1, true)
 	}
 
 	srv := server.New()
@@ -250,7 +259,7 @@ func main() {
 	if err != nil {
 		slog.Error("failed to start server", "error", err)
 		printServerError(err)
-		os.Exit(1)
+		pauseExit(1, true)
 	}
 	slog.Info("opencode server started", "url", baseURL)
 
@@ -273,7 +282,7 @@ func main() {
 		slog.Error("failed to create session", "agent", cfg.Agent, "error", err)
 		fmt.Fprintln(os.Stderr, formatOpenCodeError(err))
 		cleanup()
-		os.Exit(1)
+		pauseExit(1, true)
 	}
 	slog.Info("session created", "id", sessionID, "agent", cfg.Agent)
 
@@ -289,13 +298,13 @@ func main() {
 			slog.Error("failed to generate messages", "error", err)
 			fmt.Fprintln(os.Stderr, formatOpenCodeError(err))
 			cleanup()
-			os.Exit(1)
+			pauseExit(1, true)
 		}
 		slog.Info("messages generated", "count", len(messages))
 		if len(messages) > 0 {
 			fmt.Println(formatMessageFromOC(messages[0]))
 		}
-		return
+		pauseExit(0, false)
 	}
 
 	if cfg.Quiet && cfg.SubjectCount == 1 {
@@ -305,13 +314,13 @@ func main() {
 			slog.Error("failed to generate messages", "error", err)
 			fmt.Fprintln(os.Stderr, formatOpenCodeError(err))
 			cleanup()
-			os.Exit(1)
+			pauseExit(1, true)
 		}
 		slog.Info("messages generated", "count", len(messages))
 		if len(messages) > 0 {
 			fmt.Println(formatMessageFromOC(messages[0]))
 		}
-		return
+		pauseExit(0, false)
 	}
 }
 
@@ -365,12 +374,25 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
-func pause(isTTY bool) {
-	slog.Debug("pausing before exit")
-	fmt.Fprintf(os.Stderr, "\nPress any key to exit...")
+func pauseWithEnter(isTTY bool, message string) {
+	slog.Debug("pausing before exit", "message", message)
+	fmt.Fprintf(os.Stderr, "\n%s", message)
 	if isTTY {
-		buf := make([]byte, 1)
-		os.Stdin.Read(buf)
+		tty, err := os.OpenFile("/dev/tty", os.O_RDONLY, 0)
+		if err != nil {
+			return
+		}
+		defer tty.Close()
+		var buf [1]byte
+		for {
+			n, _ := tty.Read(buf[:])
+			if n == 0 {
+				break
+			}
+			if buf[0] == '\n' {
+				break
+			}
+		}
 	}
 	fmt.Fprintln(os.Stderr)
 }

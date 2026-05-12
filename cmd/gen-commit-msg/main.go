@@ -69,6 +69,14 @@ func main() {
 		return
 	}
 
+	repoDir, err := os.Getwd()
+	if err != nil {
+		slog.Error("failed to get current directory", "error", err)
+		fmt.Fprintln(os.Stderr, "Error: failed to get current directory: "+err.Error())
+		os.Exit(1)
+	}
+	slog.Debug("repository directory", "dir", repoDir)
+
 	isTTY := isTerminal()
 	slog.Debug("terminal check", "is_tty", isTTY)
 	if !isTTY && cfg.SubjectCount > 1 {
@@ -147,7 +155,7 @@ func main() {
 
 			// Step 2: Creating session.
 			p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepRunning})
-			oc = opencode.NewClient(baseURL)
+			oc = opencode.NewClient(baseURL, repoDir, cfg.Agent)
 			var createErr error
 			sessionID, createErr = oc.CreateSession(ctx, cfg.Agent)
 			if createErr != nil {
@@ -246,7 +254,7 @@ func main() {
 	}
 	slog.Info("opencode server started", "url", baseURL)
 
-	oc := opencode.NewClient(baseURL)
+	oc := opencode.NewClient(baseURL, repoDir, cfg.Agent)
 	sessionID, err := oc.CreateSession(ctx, cfg.Agent)
 	cleanup := func() {
 		slog.Debug("cleaning up session and server", "session_id", sessionID)

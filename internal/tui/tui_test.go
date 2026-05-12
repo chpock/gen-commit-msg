@@ -384,3 +384,65 @@ func TestProgressViewShowsLogPath(t *testing.T) {
 		t.Errorf("progress view missing log path: %q", v)
 	}
 }
+
+func TestAllStepsDoneMsg(t *testing.T) {
+	msg := AllStepsDone()
+	_, ok := msg.(allStepsDoneMsg)
+	if !ok {
+		t.Fatal("AllStepsDone should return allStepsDoneMsg")
+	}
+}
+
+func TestKeyQuitOnFailedStep(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	labels := stepLabels()
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: labels[i], status: StepPending}
+	}
+	m.steps[0].status = StepFailed
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !updated.(Model).quitting {
+		t.Error("should set quitting on keypress with failed step")
+	}
+	if cmd == nil {
+		t.Error("should return tea.Quit command")
+	}
+}
+
+func TestStepUpdateOutOfBoundsIsIgnored(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepPending}
+	}
+	msg := StepUpdateMsg{Index: 99, Status: StepRunning}
+	updated, _ := m.Update(msg)
+	for _, s := range updated.(Model).steps {
+		if s.status != StepPending {
+			t.Errorf("out-of-bounds update should not change any step, got %v", s.status)
+		}
+	}
+	if updated.(Model).stepDetail != "" {
+		t.Errorf("out-of-bounds update should not set stepDetail, got %q", updated.(Model).stepDetail)
+	}
+}
+
+func TestSpinnerTickInProgressState(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepPending}
+	}
+	// Simulate a spinner tick arriving in progress state.
+	cmd := m.spinner.Tick
+	tickMsg := cmd()
+	updated, _ := m.Update(tickMsg)
+	// Should not panic; model should remain in progress state.
+	if updated.(Model).state != stateProgress {
+		t.Errorf("state should remain stateProgress after tick, got %v", updated.(Model).state)
+	}
+}

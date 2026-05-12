@@ -138,6 +138,10 @@ func SetLogPath(path string) tea.Msg {
 	return setLogPathMsg{path: path}
 }
 
+func AllStepsDone() tea.Msg {
+	return allStepsDoneMsg{}
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -202,9 +206,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state == stateProgress {
 			if msg.Index >= 0 && msg.Index < len(m.steps) {
 				m.steps[msg.Index].status = msg.Status
+			} else {
+				slog.Warn("step update with out-of-bounds index", "index", msg.Index, "len", len(m.steps))
 			}
 			m.stepDetail = msg.Detail
 			if msg.Status == StepFailed || msg.Status == StepWarning {
+				slog.Debug("step transition", "index", msg.Index, "status", msg.Status, "detail", msg.Detail)
 				return m, nil
 			}
 			return m, m.spinner.Tick
@@ -217,6 +224,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch m.state {
+	case stateProgress:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 	case stateSpinner:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)

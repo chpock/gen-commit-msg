@@ -20,6 +20,37 @@ const (
 	stateError
 )
 
+type stepStatus int
+
+const (
+	stepPending stepStatus = iota
+	stepRunning
+	stepDone
+	stepFailed
+	stepWarning
+)
+
+type stepItem struct {
+	label  string
+	status stepStatus
+}
+
+type stepUpdateMsg struct {
+	index  int
+	status stepStatus
+	detail string
+}
+
+func stepLabels() [5]string {
+	return [5]string{
+		"Starting OpenCode...",
+		"Creating session...",
+		"Generating commit messages...",
+		"Deleting session...",
+		"Stopping OpenCode server...",
+	}
+}
+
 type CommitItem struct {
 	Subject string
 	Body    string
@@ -41,6 +72,7 @@ type Model struct {
 	quiet        bool
 	width        int
 	height       int
+	logPath      string
 }
 
 func NewModel(subjectCount int, quiet bool) Model {
@@ -81,6 +113,14 @@ func SetMessages(messages []CommitItem) tea.Msg {
 
 func SetError(err error) tea.Msg {
 	return generationResultMsg{err: err}
+}
+
+type setLogPathMsg struct {
+	path string
+}
+
+func SetLogPath(path string) tea.Msg {
+	return setLogPathMsg{path: path}
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

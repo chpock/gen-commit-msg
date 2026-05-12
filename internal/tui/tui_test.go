@@ -223,6 +223,46 @@ func TestCommitItemSatisfiesListItem(t *testing.T) {
 	}
 }
 
+func TestStepStatusValues(t *testing.T) {
+	if stepPending != 0 {
+		t.Error("stepPending should be 0 (zero value)")
+	}
+	if stepRunning != 1 {
+		t.Error("stepRunning should be 1")
+	}
+	if stepDone != 2 {
+		t.Error("stepDone should be 2")
+	}
+	if stepFailed != 3 {
+		t.Error("stepFailed should be 3")
+	}
+	if stepWarning != 4 {
+		t.Error("stepWarning should be 4")
+	}
+}
+
+func TestStepLabels(t *testing.T) {
+	labels := stepLabels()
+	if len(labels) != 5 {
+		t.Fatalf("expected 5 step labels, got %d", len(labels))
+	}
+	if labels[0] != "Starting OpenCode..." {
+		t.Errorf("step 0 label = %q", labels[0])
+	}
+	if labels[1] != "Creating session..." {
+		t.Errorf("step 1 label = %q", labels[1])
+	}
+	if labels[2] != "Generating commit messages..." {
+		t.Errorf("step 2 label = %q", labels[2])
+	}
+	if labels[3] != "Deleting session..." {
+		t.Errorf("step 3 label = %q", labels[3])
+	}
+	if labels[4] != "Stopping OpenCode server..." {
+		t.Errorf("step 4 label = %q", labels[4])
+	}
+}
+
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }

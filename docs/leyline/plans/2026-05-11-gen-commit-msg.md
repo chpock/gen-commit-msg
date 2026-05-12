@@ -185,7 +185,7 @@ func ParseFlags() (*Config, error) {
 	flags.BoolP("quiet", "q", false, "suppress progress output")
 	flags.StringP("agent", "a", "gen-commit-msg", "opencode agent name")
 	flags.StringP("log-level", "l", "error", "log verbosity")
-	flags.String("log-file", "", "log output file, '-' for stdout")
+	flags.String("log-file", "", "log output file (default: stderr)")
 	flags.String("pause", "on-error", "pause before exit: on, off, on-error")
 	flags.String("install-agent", "if-not-exists", "agent install behavior: always, if-not-exists, no")
 	flags.BoolP("version", "V", false, "print version and exit")

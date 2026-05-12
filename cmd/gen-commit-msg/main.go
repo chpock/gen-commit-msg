@@ -167,7 +167,9 @@ func main() {
 	slog.Info("requesting message generation (background)",
 		"session_id", sessionID, "subject_count", cfg.SubjectCount, "body", cfg.Body)
 	m := tui.NewModel(int(cfg.SubjectCount), cfg.Quiet)
-	p := tea.NewProgram(m)
+	tty, closeTTY := openTTY()
+	defer closeTTY()
+	p := tea.NewProgram(m, tea.WithOutput(tty))
 
 	go func() {
 		messages, err := oc.GenerateMessages(ctx, sessionID, genParams)
@@ -188,6 +190,7 @@ func main() {
 	if err != nil {
 		slog.Error("TUI initialization failed", "error", err)
 		fmt.Fprintf(os.Stderr, "Error: TUI initialization failed: %v\n", err)
+		closeTTY()
 		cleanup()
 		os.Exit(1)
 	}
@@ -248,4 +251,13 @@ func printServerError(err error) {
 
 func formatOpenCodeError(err error) string {
 	return fmt.Sprintf("Error: failed to generate commit message: %v", err)
+}
+
+func openTTY() (tty *os.File, close func()) {
+	f, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+	if err != nil {
+		slog.Debug("/dev/tty not available, falling back to stderr", "error", err)
+		return os.Stderr, func() {}
+	}
+	return f, func() { f.Close() }
 }

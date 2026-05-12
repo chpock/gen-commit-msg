@@ -102,7 +102,7 @@ Priority: CLI flag > env var > default.
 | `--version` | `-V` | — | — | — | Print version and exit |
 | `--help` | `-h` | — | — | — | Print help and exit |
 | `--log-level` | `-l` | `GCM_LOG_LEVEL` | debug, info, warn, error | error | Log verbosity |
-| `--log-file` | | `GCM_LOG_FILE` | path, `-` for stdout | (stderr) | Log output destination |
+| `--log-file` | | `GCM_LOG_FILE` | path | (stderr) | Log output destination |
 | `--subject-count` | `-n` | `GCM_SUBJECT_COUNT` | 1..N | 5 | Number of subject line variants to request |
 | `--body` | | `GCM_BODY` | true, false | true | Whether to generate message body |
 | `--quiet` | `-q` | `GCM_QUIET` | true, false | false | Suppress progress messages and spinner (not the selection list) |

@@ -39,10 +39,8 @@ func SetupFromConfig(logLevel, logFile string) error {
 
 	var w io.Writer
 	switch logFile {
-	case "":
+	case "", "-":
 		w = os.Stderr
-	case "-":
-		w = os.Stdout
 	default:
 		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {

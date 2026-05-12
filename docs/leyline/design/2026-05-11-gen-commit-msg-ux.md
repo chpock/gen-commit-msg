@@ -16,8 +16,9 @@ design-interrogation skipped - scope: cli-only, UX paths exhaustively covered by
 | TUI: spinner | bubbletea view | "Generating commit messages..." with animated spinner |
 | TUI: result list | bubbletea view | Interactive scrollable list of commit message variants |
 | TUI: pause overlay | bubbletea view | "Press any key to exit..." on error/exit |
-| stdout | text output | Selected commit message (or direct output in quiet mode) |
-| stderr | text output | Error messages, log output (when `--log-file -`) |
+| stdout | text output | Final result: commit message, `--version`, `--help` |
+| stderr | text output | Error messages, log output |
+| `/dev/tty` | TUI output | Interactive TUI rendering (spinner, list); fallback to stderr |
 | Log file | file output | Structured log lines (when `--log-file <path>`) |
 
 ## User flows
@@ -129,8 +130,8 @@ Three reference strings:
 
 ## Output accessibility
 
-- **Color independence**: spinner and TUI use only text characters. List selection indicated by `>` prefix and terminal inversion, not color alone. stdout output is plain text.
-- **Screen-reader friendly**: error messages prefixed with `Error: `; all output is plain text. No ANSI escape sequences in stdout/stderr output (output can be piped).
+- **Color independence**: spinner and TUI use only text characters. List selection indicated by `>` prefix and terminal inversion, not color alone. TUI rendering goes to stderr; stdout output is plain text.
+- **Screen-reader friendly**: error messages prefixed with `Error: `; all output is plain text. No ANSI escape sequences in stdout or stderr output (both can be safely piped). TUI escape sequences go to `/dev/tty`.
 - **Terminal width**: TUI adapts to terminal width. Commit message subject line wraps at terminal edge. Minimum 40 columns; below that the list truncates with `...`.
 - **Motion**: spinner uses standard character cycling (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`). No flashing or rapid animation.
 - **Focus management**: Up/Down arrows navigate list. Enter selects. Esc / Ctrl+C exits (treated as SIGINT → graceful shutdown).

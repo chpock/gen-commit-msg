@@ -214,12 +214,12 @@ func main() {
 		m = finalModel.(tui.Model)
 		if m.Error() != nil {
 			slog.Error("TUI ended with error", "error", m.Error())
-			fmt.Fprintln(os.Stderr, formatOpenCodeError(m.Error()))
-		} else {
-			selected := m.SelectedMessage()
-			slog.Info("message selected", "message", truncateString(selected, 80))
-			fmt.Println(selected)
+			fmt.Fprintln(os.Stderr, m.Error().Error())
+			os.Exit(1)
 		}
+		selected := m.SelectedMessage()
+		slog.Info("message selected", "message", truncateString(selected, 80))
+		fmt.Println(selected)
 
 		if cfg.Pause == "on" {
 			pause(isTTY)

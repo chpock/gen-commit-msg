@@ -148,6 +148,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state == stateProgress {
 			for _, s := range m.steps {
 				if s.status == StepFailed {
+					m.err = fmt.Errorf("%s", m.stepDetail)
 					m.quitting = true
 					return m, tea.Quit
 				}

@@ -301,3 +301,16 @@
 - **F12**: Inconsistent stderr error formatting — deferred: cosmetic. Owner: human partner.
 - **F13/D5**: Zero messages UX spec divergence — deferred: needs human partner decision on spec vs code. Owner: human partner.
 - **D9**: Agent error prefix spec update — deferred: needs spec re-approval. Owner: human partner.
+
+## Deferred findings — acknowledged
+
+Acknowledged by human partner on 2026-05-12:
+- F3/D8: Unicode fallback — accepted deferred
+- F6/D3/D10: 1s debounce + key restriction — accepted deferred
+- F12: Inconsistent stderr prefix — accepted deferred
+- F13/D5: Zero messages UX spec divergence — accepted as-is (code is correct)
+- D9: Agent error prefix — spec to be updated to match code
+
+Code review complete - round 1 - 2026-05-12
+
+Design review complete - round 1 - 2026-05-12

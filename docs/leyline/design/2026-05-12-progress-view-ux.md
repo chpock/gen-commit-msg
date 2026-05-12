@@ -17,6 +17,8 @@ Design-interrogation round 1 applied:
 - (S) TUI render race → goroutine starts after first View() (see product spec)
 - (O) bright ANSI-dependent → SGR 1 for running, SGR 2 for pending/done
 
+Design-interrogation pass complete - round 1 - 2026-05-12
+
 ## Surfaces enumerated
 - **Progress view**: Vertical list of 5 steps with status indicators (pending/running/done/failed) + inline error display. Shown immediately when TUI starts, before message selection. All errors (step failures, zero messages) are shown inline on this surface.
 - **Message selection view**: Existing list of commit message subjects with ↑↓ navigation and Enter to select.

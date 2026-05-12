@@ -210,6 +210,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if msg.Status == StepFailed {
 				m.err = fmt.Errorf("%s", msg.Detail)
+				m.state = stateError
 				slog.Debug("step failure", "index", msg.Index, "detail", msg.Detail)
 				return m, nil
 			}

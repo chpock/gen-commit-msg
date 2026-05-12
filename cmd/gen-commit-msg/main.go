@@ -129,7 +129,6 @@ func main() {
 				if cleanupDone {
 					return
 				}
-				fmt.Fprintln(os.Stderr, "Cleaning up...")
 				if sessionID != "" && oc != nil {
 					delCtx, delCancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer delCancel()

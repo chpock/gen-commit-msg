@@ -20,25 +20,25 @@ const (
 	stateError
 )
 
-type stepStatus int
+type StepStatus int
 
 const (
-	stepPending stepStatus = iota
-	stepRunning
-	stepDone
-	stepFailed
-	stepWarning
+	StepPending StepStatus = iota
+	StepRunning
+	StepDone
+	StepFailed
+	StepWarning
 )
 
 type stepItem struct {
 	label  string
-	status stepStatus
+	status StepStatus
 }
 
-type stepUpdateMsg struct {
-	index  int
-	status stepStatus
-	detail string
+type StepUpdateMsg struct {
+	Index  int
+	Status StepStatus
+	Detail string
 }
 
 func stepLabels() [5]string {

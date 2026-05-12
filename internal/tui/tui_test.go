@@ -224,20 +224,20 @@ func TestCommitItemSatisfiesListItem(t *testing.T) {
 }
 
 func TestStepStatusValues(t *testing.T) {
-	if stepPending != 0 {
-		t.Error("stepPending should be 0 (zero value)")
+	if StepPending != 0 {
+		t.Error("StepPending should be 0 (zero value)")
 	}
-	if stepRunning != 1 {
-		t.Error("stepRunning should be 1")
+	if StepRunning != 1 {
+		t.Error("StepRunning should be 1")
 	}
-	if stepDone != 2 {
-		t.Error("stepDone should be 2")
+	if StepDone != 2 {
+		t.Error("StepDone should be 2")
 	}
-	if stepFailed != 3 {
-		t.Error("stepFailed should be 3")
+	if StepFailed != 3 {
+		t.Error("StepFailed should be 3")
 	}
-	if stepWarning != 4 {
-		t.Error("stepWarning should be 4")
+	if StepWarning != 4 {
+		t.Error("StepWarning should be 4")
 	}
 }
 

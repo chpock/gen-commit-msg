@@ -109,7 +109,7 @@ func Usage() {
 	flags.BoolP("version", "V", false, "print version and exit")
 	flags.BoolP("help", "h", false, "print help and exit")
 	flags.Usage = func() {
-		fmt.Fprintf(flags.Output(), "Usage of %s:\n", flags.Name())
+		_, _ = fmt.Fprintf(flags.Output(), "Usage of %s:\n", flags.Name())
 		flags.PrintDefaults()
 	}
 	flags.Usage()

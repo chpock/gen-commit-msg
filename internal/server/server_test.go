@@ -18,11 +18,7 @@ func TestServerHealthy_OpenCodeNotFound(t *testing.T) {
 }
 
 func TestServerInterface(t *testing.T) {
-	// Verify the Server type compiles and satisfies its interface
-	s := &ProcessServer{}
-	if s == nil {
-		t.Error("ProcessServer is nil")
-	}
+	var _ Server = &ProcessServer{}
 }
 
 func TestParseListenURL_Success(t *testing.T) {

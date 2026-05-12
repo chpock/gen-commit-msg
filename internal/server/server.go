@@ -73,7 +73,7 @@ func (s *ProcessServer) Start(ctx context.Context) (string, error) {
 	baseURL, err := parseListenURL(stdout, 30*time.Second)
 	if err != nil {
 		slog.Error("failed to parse listen URL", "error", err)
-		s.Stop()
+		_ = s.Stop()
 		if stderrBuf.Len() > 0 {
 			slog.Debug("opencode stderr", "output", stderrBuf.String())
 			return "", fmt.Errorf("parse listen URL: %w\nstderr: %s", err, stderrBuf.String())
@@ -85,7 +85,7 @@ func (s *ProcessServer) Start(ctx context.Context) (string, error) {
 
 	if err := healthCheck(ctx, baseURL); err != nil {
 		slog.Error("health check failed", "url", baseURL, "error", err)
-		s.Stop()
+		_ = s.Stop()
 		return "", fmt.Errorf("health check: %w", err)
 	}
 
@@ -132,7 +132,7 @@ func healthCheck(ctx context.Context, baseURL string) error {
 	if err != nil {
 		return checkListen(baseURL)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil
 	}
@@ -156,7 +156,7 @@ func checkListen(baseURL string) error {
 	if err != nil {
 		return fmt.Errorf("server not listening on %s: %w", dialAddr, err)
 	}
-	conn.Close()
+	_ = conn.Close()
 	return nil
 }
 
@@ -166,7 +166,7 @@ func (s *ProcessServer) Stop() error {
 		s.cancel()
 	}
 	if s.cmd != nil && s.cmd.Process != nil {
-		s.cmd.Process.Signal(syscall.SIGTERM)
+		_ = s.cmd.Process.Signal(syscall.SIGTERM)
 		done := make(chan error, 1)
 		go func() { done <- s.cmd.Wait() }()
 		select {
@@ -174,7 +174,7 @@ func (s *ProcessServer) Stop() error {
 			slog.Debug("opencode process exited cleanly")
 		case <-time.After(5 * time.Second):
 			slog.Warn("opencode server did not stop gracefully, killing")
-			s.cmd.Process.Kill()
+			_ = s.cmd.Process.Kill()
 		}
 	}
 	return nil

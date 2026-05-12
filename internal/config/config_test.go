@@ -37,11 +37,11 @@ func TestParseFlagsDefaults(t *testing.T) {
 
 func TestParseFlagsEnvVars(t *testing.T) {
 	os.Args = []string{"gen-commit-msg"}
-	os.Setenv("GCM_SUBJECT_COUNT", "3")
-	os.Setenv("GCM_BODY", "false")
+	_ = os.Setenv("GCM_SUBJECT_COUNT", "3")
+	_ = os.Setenv("GCM_BODY", "false")
 	t.Cleanup(func() {
-		os.Unsetenv("GCM_SUBJECT_COUNT")
-		os.Unsetenv("GCM_BODY")
+		_ = os.Unsetenv("GCM_SUBJECT_COUNT")
+		_ = os.Unsetenv("GCM_BODY")
 	})
 
 	cfg, err := ParseFlags()
@@ -58,8 +58,8 @@ func TestParseFlagsEnvVars(t *testing.T) {
 
 func TestParseFlagsVersionEarlyReturn(t *testing.T) {
 	os.Args = []string{"gen-commit-msg", "--version"}
-	os.Setenv("GCM_SUBJECT_COUNT", "100")
-	t.Cleanup(func() { os.Unsetenv("GCM_SUBJECT_COUNT") })
+	_ = os.Setenv("GCM_SUBJECT_COUNT", "100")
+	t.Cleanup(func() { _ = os.Unsetenv("GCM_SUBJECT_COUNT") })
 
 	cfg, err := ParseFlags()
 	if err != nil {
@@ -75,8 +75,8 @@ func TestParseFlagsVersionEarlyReturn(t *testing.T) {
 
 func TestParseFlagsCLIOverridesEnv(t *testing.T) {
 	os.Args = []string{"gen-commit-msg", "--subject-count", "7"}
-	os.Setenv("GCM_SUBJECT_COUNT", "3")
-	t.Cleanup(func() { os.Unsetenv("GCM_SUBJECT_COUNT") })
+	_ = os.Setenv("GCM_SUBJECT_COUNT", "3")
+	t.Cleanup(func() { _ = os.Unsetenv("GCM_SUBJECT_COUNT") })
 
 	cfg, err := ParseFlags()
 	if err != nil {

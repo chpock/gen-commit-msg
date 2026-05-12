@@ -341,7 +341,7 @@ func openTTY() (*os.File, func()) {
 	if err != nil {
 		return os.Stdout, func() {}
 	}
-	return f, func() { f.Close() }
+	return f, func() { _ = f.Close() }
 }
 
 func logFilePath(logFile string) string {
@@ -366,7 +366,7 @@ func pauseWithEnter(isTTY bool, message string) {
 		if err != nil {
 			return
 		}
-		defer tty.Close()
+		defer func() { _ = tty.Close() }()
 		var buf [1]byte
 		for {
 			n, _ := tty.Read(buf[:])

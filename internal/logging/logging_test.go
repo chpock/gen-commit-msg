@@ -118,7 +118,7 @@ func TestSetupFileOutput(t *testing.T) {
 	handler := newHandler(f, slog.LevelInfo)
 	logger := slog.New(handler)
 	logger.Info("file log msg")
-	f.Close()
+	_ = f.Close()
 
 	data, err := os.ReadFile(logPath)
 	if err != nil {
@@ -137,7 +137,7 @@ func TestSetupFromConfigFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetupFromConfig: %v", err)
 	}
-	t.Cleanup(func() { os.Remove(logPath) })
+	t.Cleanup(func() { _ = os.Remove(logPath) })
 
 	slog.Info("config file msg")
 	// The handler writes asynchronously, so we need to check the file
@@ -151,8 +151,7 @@ func TestSetupFromConfigFile(t *testing.T) {
 }
 
 func TestSetupFromConfigStdout(t *testing.T) {
-	var saved *slog.Logger
-	saved = slog.Default()
+	saved := slog.Default()
 
 	err := SetupFromConfig("warn", "-")
 	if err != nil {
@@ -167,8 +166,7 @@ func TestSetupFromConfigStdout(t *testing.T) {
 }
 
 func TestSetupFromConfigDefault(t *testing.T) {
-	var saved *slog.Logger
-	saved = slog.Default()
+	saved := slog.Default()
 
 	err := SetupFromConfig("error", "")
 	if err != nil {

@@ -368,7 +368,7 @@ func (d commitItemDelegate) Render(w io.Writer, m list.Model, index int, item li
 	if ci.Body != "" {
 		s += "\n" + descStyle.Render("    "+ci.Body)
 	}
-	fmt.Fprint(w, s)
+	_, _ = fmt.Fprint(w, s)
 }
 
 func (d commitItemDelegate) Height() int {

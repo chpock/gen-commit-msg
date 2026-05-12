@@ -150,7 +150,7 @@ func main() {
 
 			if err := agent.Ensure(cfg.Agent, cfg.InstallAgent); err != nil {
 				slog.Error("failed to ensure agent", "error", err)
-				p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "Error: agent setup failed: " + err.Error()})
+				p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "Agent setup failed: " + err.Error()})
 				return
 			}
 
@@ -158,7 +158,7 @@ func main() {
 			baseURL, err := srv.Start(ctx)
 			if err != nil {
 				slog.Error("failed to start server", "error", err)
-				p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "Error: opencode server failed to start: " + err.Error()})
+				p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "OpenCode server failed to start: " + err.Error()})
 				return
 			}
 			slog.Info("opencode server started", "url", baseURL)
@@ -171,7 +171,7 @@ func main() {
 			sessionID, createErr = oc.CreateSession(ctx, cfg.Agent)
 			if createErr != nil {
 				slog.Error("failed to create session", "agent", cfg.Agent, "error", createErr)
-				p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepFailed, Detail: "Error: failed to create session: " + createErr.Error()})
+				p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepFailed, Detail: "Failed to create session: " + createErr.Error()})
 				return
 			}
 			slog.Info("session created", "id", sessionID, "agent", cfg.Agent)
@@ -186,7 +186,7 @@ func main() {
 			messages, genErr := oc.GenerateMessages(ctx, sessionID, genParams)
 			if genErr != nil {
 				slog.Error("failed to generate messages", "error", genErr)
-				p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepFailed, Detail: "Error: failed to generate commit messages: " + genErr.Error()})
+				p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepFailed, Detail: "Failed to generate commit messages: " + genErr.Error()})
 				return
 			}
 			slog.Info("messages generated", "count", len(messages))
@@ -236,14 +236,13 @@ func main() {
 		m = finalModel.(tui.Model)
 		if m.Error() != nil {
 			slog.Error("TUI ended with error", "error", m.Error())
-			fmt.Fprintln(os.Stderr, m.Error().Error())
-			pauseExit(1, true)
+			os.Exit(1)
 		}
 		selected := m.SelectedMessage()
 		slog.Info("message selected", "message", truncateString(selected, 80))
 		fmt.Println(selected)
 
-		pauseExit(0, false)
+		return
 	}
 
 	// Ensure agent prompt file exists.

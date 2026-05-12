@@ -314,3 +314,14 @@ Acknowledged by human partner on 2026-05-12:
 Code review complete - round 1 - 2026-05-12
 
 Design review complete - round 1 - 2026-05-12
+
+---
+
+## Bug fix: duplicate error display after TUI exit
+
+### Systematic-debugging record
+- **Root cause**: After TUI renders an error and the user dismisses it (pressing a key), `main.go` unconditionally printed `m.Error()` to stderr and called `pauseExit`, showing the error a second time and requiring a second keypress. The TUI's `stateError` view and the CLI-layer error output were not coordinated — both displayed independently.
+- **Falsifying test**: Run the tool with an invalid configuration (e.g., `--agent nonexistent`). Before fix: error appears twice, with "Press any key" then "An error occurred. Press Enter." After fix: error appears once.
+- **Hypothesis**: If the TUI successfully displayed the error (reached `stateError` and user dismissed it), then `main.go` after `p.Run()` must not re-display the error or re-pause — the user already acknowledged it.
+- **Fix**: Replaced `fmt.Fprintln(os.Stderr, ...) + pauseExit(1, true)` with `os.Exit(1)` in the `m.Error() != nil` block after `p.Run()`. Also removed redundant "Error: " prefix from four `StepUpdateMsg.Detail` strings (TUI view already adds "Error: " prefix). Improved `getStructuredJSON` error message: log raw JSON at DEBUG instead of embedding it in the error string.
+- **Regression coverage**: `make all` passes — all 8 packages green, go vet clean, golangci-lint 0 issues, binary builds. Direct manual test: run with invalid agent name → error shown once in TUI → single exit without re-prompt.

@@ -163,8 +163,6 @@ func getStructuredJSON(res *opencode.SessionPromptResponse) ([]byte, error) {
 		return []byte(raw), nil
 	}
 
-	return nil, fmt.Errorf(
-		"structured output was not found in response: %s",
-		res.Info.JSON.RawJSON(),
-	)
+	slog.Debug("structured output not found in response", "raw", res.Info.JSON.RawJSON())
+	return nil, errors.New("structured output was not found in response")
 }

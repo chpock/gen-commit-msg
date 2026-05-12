@@ -101,6 +101,28 @@ func main() {
 		}
 
 		go func() {
+			var srv *server.ProcessServer
+			var oc *opencode.Client
+			var sessionID string
+			cleanupDone := false
+			defer func() {
+				if cleanupDone {
+					return
+				}
+				if sessionID != "" && oc != nil {
+					delCtx, delCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer delCancel()
+					if err := oc.DeleteSession(delCtx, sessionID); err != nil {
+						slog.Warn("cleanup: failed to delete session", "session_id", sessionID, "error", err)
+					}
+				}
+				if srv != nil {
+					if err := srv.Stop(); err != nil {
+						slog.Warn("cleanup: failed to stop server", "error", err)
+					}
+				}
+			}()
+
 			time.Sleep(50 * time.Millisecond)
 
 			// Step 1: Starting OpenCode (agent + server + healthcheck).
@@ -108,28 +130,31 @@ func main() {
 
 			if err := agent.Ensure(cfg.Agent, cfg.InstallAgent); err != nil {
 				slog.Error("failed to ensure agent", "error", err)
-				p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "Error: opencode server failed to start: " + err.Error()})
+				p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "Error: agent setup failed: " + err.Error()})
 				return
 			}
 
-			srv := server.New()
+			srv = server.New()
 			baseURL, err := srv.Start(ctx)
 			if err != nil {
 				slog.Error("failed to start server", "error", err)
 				p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "Error: opencode server failed to start: " + err.Error()})
 				return
 			}
+			slog.Info("opencode server started", "url", baseURL)
 			p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepDone})
 
 			// Step 2: Creating session.
 			p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepRunning})
-			oc := opencode.NewClient(baseURL)
-			sessionID, err := oc.CreateSession(ctx, cfg.Agent)
-			if err != nil {
-				slog.Error("failed to create session", "agent", cfg.Agent, "error", err)
-				p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepFailed, Detail: "Error: failed to create session: " + err.Error()})
+			oc = opencode.NewClient(baseURL)
+			var createErr error
+			sessionID, createErr = oc.CreateSession(ctx, cfg.Agent)
+			if createErr != nil {
+				slog.Error("failed to create session", "agent", cfg.Agent, "error", createErr)
+				p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepFailed, Detail: "Error: failed to create session: " + createErr.Error()})
 				return
 			}
+			slog.Info("session created", "id", sessionID, "agent", cfg.Agent)
 			p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepDone})
 
 			// Step 3: Generating commit messages.
@@ -144,6 +169,7 @@ func main() {
 				p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepFailed, Detail: "Error: failed to generate commit messages: " + genErr.Error()})
 				return
 			}
+			slog.Info("messages generated", "count", len(messages))
 			p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepDone})
 
 			// Step 4: Deleting session (cleanup — non-critical after generation).
@@ -154,6 +180,7 @@ func main() {
 				slog.Warn("failed to delete session", "session_id", sessionID, "error", err)
 				p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepWarning, Detail: "Cleanup issue: " + err.Error()})
 			} else {
+				slog.Info("session deleted", "id", sessionID)
 				p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepDone})
 			}
 
@@ -163,15 +190,17 @@ func main() {
 				slog.Warn("failed to stop server", "error", err)
 				p.Send(tui.StepUpdateMsg{Index: 4, Status: tui.StepWarning, Detail: "Cleanup issue: " + err.Error()})
 			} else {
+				slog.Info("server stopped")
 				p.Send(tui.StepUpdateMsg{Index: 4, Status: tui.StepDone})
 			}
+
+			cleanupDone = true
 
 			items := make([]tui.CommitItem, len(messages))
 			for i, msg := range messages {
 				items[i] = tui.CommitItem{Subject: msg.Subject, Body: msg.Body}
 			}
 			p.Send(tui.SetMessages(items))
-			p.Send(tui.AllStepsDone())
 		}()
 
 		finalModel, err := p.Run()
@@ -196,6 +225,13 @@ func main() {
 			pause(isTTY)
 		}
 		return
+	}
+
+	// Ensure agent prompt file exists.
+	if err := agent.Ensure(cfg.Agent, cfg.InstallAgent); err != nil {
+		slog.Error("failed to ensure agent", "error", err)
+		fmt.Fprintln(os.Stderr, "Error: failed to ensure agent: "+err.Error())
+		os.Exit(1)
 	}
 
 	srv := server.New()

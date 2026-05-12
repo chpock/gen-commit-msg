@@ -29,6 +29,7 @@ const (
 	StepDone
 	StepFailed
 	StepWarning
+	StepSkipped
 )
 
 type stepItem struct {
@@ -205,6 +206,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Index >= 0 && msg.Index < len(m.steps) {
 				m.steps[msg.Index].status = msg.Status
 				m.stepDetail = msg.Detail
+				if msg.Status == StepFailed {
+					for i := msg.Index + 1; i < len(m.steps); i++ {
+						m.steps[i].status = StepSkipped
+					}
+				}
 			} else {
 				slog.Warn("step update with out-of-bounds index", "index", msg.Index, "len", len(m.steps))
 			}
@@ -262,41 +268,48 @@ func formatMessage(item CommitItem) string {
 	return strings.TrimSpace(item.Subject) + "\n\n" + strings.TrimSpace(item.Body)
 }
 
+func (m Model) renderSteps(b *strings.Builder) {
+	bold := lipgloss.NewStyle().Bold(true)
+	faint := lipgloss.NewStyle().Faint(true)
+	doneIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render
+	failIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render
+	warnIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render
+	skipIcon := lipgloss.NewStyle().Faint(true).Render
+	for _, s := range m.steps {
+		b.WriteString("\n  ")
+		switch s.status {
+		case StepPending:
+			b.WriteString(faint.Render("  "))
+			b.WriteString(" ")
+			b.WriteString(faint.Render(s.label))
+			continue
+		case StepRunning:
+			b.WriteString(m.spinner.View())
+			b.WriteString(" ")
+			b.WriteString(bold.Render(s.label))
+			continue
+		case StepDone:
+			b.WriteString(doneIcon("✓"))
+		case StepFailed:
+			b.WriteString(failIcon("✗"))
+		case StepWarning:
+			b.WriteString(warnIcon("⚠"))
+		case StepSkipped:
+			b.WriteString(skipIcon("-"))
+		}
+		b.WriteString(" ")
+		b.WriteString(faint.Render(s.label))
+	}
+}
+
 func (m Model) View() string {
 	switch m.state {
 	case stateProgress:
 		if m.quiet {
 			return ""
 		}
-		bold := lipgloss.NewStyle().Bold(true)
-		faint := lipgloss.NewStyle().Faint(true)
-		doneIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render
-		failIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render
-		warnIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render
 		var b strings.Builder
-		for _, s := range m.steps {
-			b.WriteString("\n  ")
-			switch s.status {
-			case StepPending:
-				b.WriteString(faint.Render("  "))
-				b.WriteString(" ")
-				b.WriteString(faint.Render(s.label))
-				continue
-			case StepRunning:
-				b.WriteString(m.spinner.View())
-				b.WriteString(" ")
-				b.WriteString(bold.Render(s.label))
-				continue
-			case StepDone:
-				b.WriteString(doneIcon("✓"))
-			case StepFailed:
-				b.WriteString(failIcon("✗"))
-			case StepWarning:
-				b.WriteString(warnIcon("⚠"))
-			}
-			b.WriteString(" ")
-			b.WriteString(faint.Render(s.label))
-		}
+		m.renderSteps(&b)
 		if m.stepDetail != "" {
 			b.WriteString("\n\n  ")
 			b.WriteString(m.stepDetail)
@@ -315,7 +328,12 @@ func (m Model) View() string {
 	case stateResult:
 		return m.list.View()
 	case stateError:
-		return fmt.Sprintf("\n  Error: %s\n\n  Press any key to exit.\n", m.err)
+		var b strings.Builder
+		m.renderSteps(&b)
+		b.WriteString("\n\n  Error: ")
+		b.WriteString(m.err.Error())
+		b.WriteString("\n\n  Press any key to exit.\n")
+		return b.String()
 	}
 	return ""
 }

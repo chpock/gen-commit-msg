@@ -241,6 +241,9 @@ func TestStepStatusValues(t *testing.T) {
 	if StepWarning != 4 {
 		t.Error("StepWarning should be 4")
 	}
+	if StepSkipped != 5 {
+		t.Error("StepSkipped should be 5")
+	}
 }
 
 func TestStepLabels(t *testing.T) {
@@ -451,5 +454,67 @@ func TestSpinnerTickInProgressState(t *testing.T) {
 	// Should not panic; model should remain in progress state.
 	if updated.(Model).state != stateProgress {
 		t.Errorf("state should remain stateProgress after tick, got %v", updated.(Model).state)
+	}
+}
+
+func TestStepSkippedValue(t *testing.T) {
+	if StepSkipped != 5 {
+		t.Errorf("StepSkipped = %v, want 5", StepSkipped)
+	}
+}
+
+func TestStepFailureMarksSubsequentStepsAsSkipped(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	labels := stepLabels()
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: labels[i], status: StepPending}
+	}
+	msg := StepUpdateMsg{Index: 2, Status: StepFailed, Detail: "connection refused"}
+	updated, _ := m.Update(msg)
+	if updated.(Model).steps[2].status != StepFailed {
+		t.Error("step 2 should be StepFailed")
+	}
+	if updated.(Model).steps[3].status != StepSkipped {
+		t.Errorf("step 3 status = %v, want StepSkipped", updated.(Model).steps[3].status)
+	}
+	if updated.(Model).steps[4].status != StepSkipped {
+		t.Errorf("step 4 status = %v, want StepSkipped", updated.(Model).steps[4].status)
+	}
+	// Steps before the failure should be unaffected.
+	if updated.(Model).steps[0].status != StepPending {
+		t.Errorf("step 0 status = %v, want StepPending", updated.(Model).steps[0].status)
+	}
+	if updated.(Model).steps[1].status != StepPending {
+		t.Errorf("step 1 status = %v, want StepPending", updated.(Model).steps[1].status)
+	}
+}
+
+func TestErrorViewShowsSteps(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateError
+	m.err = fmt.Errorf("connection refused")
+	m.steps = make([]stepItem, 5)
+	labels := stepLabels()
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: labels[i], status: StepPending}
+	}
+	m.steps[0].status = StepDone
+	m.steps[1].status = StepDone
+	m.steps[2].status = StepFailed
+	m.steps[3].status = StepSkipped
+	m.steps[4].status = StepSkipped
+	v := m.View()
+	for _, label := range labels {
+		if !contains(v, label) {
+			t.Errorf("error view missing step label: %q", label)
+		}
+	}
+	if !contains(v, "Error: connection refused") {
+		t.Errorf("error view missing error text: %q", v)
+	}
+	if !contains(v, "Press any key to exit") {
+		t.Errorf("error view missing exit prompt: %q", v)
 	}
 }

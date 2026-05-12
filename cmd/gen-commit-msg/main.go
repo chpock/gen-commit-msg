@@ -69,12 +69,6 @@ func main() {
 		return
 	}
 
-	if err := agent.Ensure(cfg.Agent, cfg.InstallAgent); err != nil {
-		slog.Error("failed to ensure agent", "agent", cfg.Agent, "mode", cfg.InstallAgent, "error", err)
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-
 	isTTY := isTerminal()
 	slog.Debug("terminal check", "is_tty", isTTY)
 	if !isTTY && cfg.SubjectCount > 1 {
@@ -94,6 +88,154 @@ func main() {
 		slog.Debug("signal received", "signal", sig)
 		cancel()
 	}()
+
+	if isTTY {
+		m := tui.NewModel(int(cfg.SubjectCount), cfg.Quiet)
+		tty, closeTTY := openTTY()
+		defer closeTTY()
+		p := tea.NewProgram(m, tea.WithOutput(tty))
+
+		logPath := logFilePath(cfg.LogFile)
+		if logPath != "" {
+			p.Send(tui.SetLogPath(logPath))
+		}
+
+		go func() {
+			var srv *server.ProcessServer
+			var oc *opencode.Client
+			var sessionID string
+			cleanupDone := false
+			defer func() {
+				if cleanupDone {
+					return
+				}
+				fmt.Fprintln(os.Stderr, "Cleaning up...")
+				if sessionID != "" && oc != nil {
+					delCtx, delCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer delCancel()
+					if err := oc.DeleteSession(delCtx, sessionID); err != nil {
+						slog.Warn("cleanup: failed to delete session", "session_id", sessionID, "error", err)
+					}
+				}
+				if srv != nil {
+					if err := srv.Stop(); err != nil {
+						slog.Warn("cleanup: failed to stop server", "error", err)
+					}
+				}
+			}()
+
+			time.Sleep(50 * time.Millisecond)
+
+			// Step 1: Starting OpenCode (agent + server + healthcheck).
+			p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepRunning})
+
+			if err := agent.Ensure(cfg.Agent, cfg.InstallAgent); err != nil {
+				slog.Error("failed to ensure agent", "error", err)
+				p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "Error: agent setup failed: " + err.Error()})
+				return
+			}
+
+			srv = server.New()
+			baseURL, err := srv.Start(ctx)
+			if err != nil {
+				slog.Error("failed to start server", "error", err)
+				p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "Error: opencode server failed to start: " + err.Error()})
+				return
+			}
+			slog.Info("opencode server started", "url", baseURL)
+			p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepDone})
+
+			// Step 2: Creating session.
+			p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepRunning})
+			oc = opencode.NewClient(baseURL)
+			var createErr error
+			sessionID, createErr = oc.CreateSession(ctx, cfg.Agent)
+			if createErr != nil {
+				slog.Error("failed to create session", "agent", cfg.Agent, "error", createErr)
+				p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepFailed, Detail: "Error: failed to create session: " + createErr.Error()})
+				return
+			}
+			slog.Info("session created", "id", sessionID, "agent", cfg.Agent)
+			p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepDone})
+
+			// Step 3: Generating commit messages.
+			p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepRunning})
+			genParams := opencode.GenerateParams{
+				SubjectCount: int(cfg.SubjectCount),
+				Body:         cfg.Body,
+			}
+			messages, genErr := oc.GenerateMessages(ctx, sessionID, genParams)
+			if genErr != nil {
+				slog.Error("failed to generate messages", "error", genErr)
+				p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepFailed, Detail: "Error: failed to generate commit messages: " + genErr.Error()})
+				return
+			}
+			slog.Info("messages generated", "count", len(messages))
+			p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepDone})
+
+			// Step 4: Deleting session (cleanup — non-critical after generation).
+			p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepRunning})
+			delCtx, delCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer delCancel()
+			if err := oc.DeleteSession(delCtx, sessionID); err != nil {
+				slog.Warn("failed to delete session", "session_id", sessionID, "error", err)
+				p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepWarning, Detail: "Cleanup issue: " + err.Error()})
+			} else {
+				slog.Info("session deleted", "id", sessionID)
+				p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepDone})
+			}
+
+			// Step 5: Stopping OpenCode server (cleanup — non-critical).
+			p.Send(tui.StepUpdateMsg{Index: 4, Status: tui.StepRunning})
+			if err := srv.Stop(); err != nil {
+				slog.Warn("failed to stop server", "error", err)
+				p.Send(tui.StepUpdateMsg{Index: 4, Status: tui.StepWarning, Detail: "Cleanup issue: " + err.Error()})
+			} else {
+				slog.Info("server stopped")
+				p.Send(tui.StepUpdateMsg{Index: 4, Status: tui.StepDone})
+			}
+
+			cleanupDone = true
+
+			time.Sleep(300 * time.Millisecond)
+
+			items := make([]tui.CommitItem, len(messages))
+			for i, msg := range messages {
+				items[i] = tui.CommitItem{Subject: msg.Subject, Body: msg.Body}
+			}
+			p.Send(tui.SetMessages(items))
+		}()
+
+		finalModel, err := p.Run()
+		if err != nil {
+			slog.Error("TUI initialization failed", "error", err)
+			fmt.Fprintf(os.Stderr, "Error: TUI initialization failed: %v\n", err)
+			closeTTY()
+			os.Exit(1)
+		}
+
+		m = finalModel.(tui.Model)
+		if m.Error() != nil {
+			slog.Error("TUI ended with error", "error", m.Error())
+			fmt.Fprintln(os.Stderr, m.Error().Error())
+			os.Exit(1)
+		}
+		selected := m.SelectedMessage()
+		slog.Info("message selected", "message", truncateString(selected, 80))
+		fmt.Println(selected)
+
+		if cfg.Pause == "on" {
+			pause(isTTY)
+		}
+		return
+	}
+
+	// Ensure agent prompt file exists.
+	if err := agent.Ensure(cfg.Agent, cfg.InstallAgent); err != nil {
+		slog.Error("failed to ensure agent", "error", err)
+		fmt.Fprintln(os.Stderr, "Error: failed to ensure agent: "+err.Error())
+		os.Exit(1)
+	}
 
 	srv := server.New()
 	baseURL, err := srv.Start(ctx)
@@ -163,66 +305,6 @@ func main() {
 		}
 		return
 	}
-
-	slog.Info("requesting message generation (background)",
-		"session_id", sessionID, "subject_count", cfg.SubjectCount, "body", cfg.Body)
-	m := tui.NewModel(int(cfg.SubjectCount), cfg.Quiet)
-	tty, closeTTY := openTTY()
-	defer closeTTY()
-	p := tea.NewProgram(m, tea.WithOutput(tty))
-
-	go func() {
-		messages, err := oc.GenerateMessages(ctx, sessionID, genParams)
-		if err != nil {
-			slog.Error("background generation failed", "error", err)
-			p.Send(tui.SetError(err))
-			return
-		}
-		slog.Debug("background generation completed", "count", len(messages))
-		items := make([]tui.CommitItem, len(messages))
-		for i, msg := range messages {
-			items[i] = tui.CommitItem{Subject: msg.Subject, Body: msg.Body}
-		}
-		p.Send(tui.SetMessages(items))
-	}()
-
-	finalModel, err := p.Run()
-	if err != nil {
-		slog.Error("TUI initialization failed", "error", err)
-		fmt.Fprintf(os.Stderr, "Error: TUI initialization failed: %v\n", err)
-		closeTTY()
-		cleanup()
-		os.Exit(1)
-	}
-
-	m = finalModel.(tui.Model)
-	selected := m.SelectedMessage()
-	truncated := selected
-	if len(truncated) > 80 {
-		truncated = truncated[:80] + "..."
-	}
-	slog.Info("message selected", "message", truncated)
-
-	if m.Error() != nil {
-		slog.Error("TUI ended with error", "error", m.Error())
-		fmt.Fprintln(os.Stderr, formatOpenCodeError(m.Error()))
-		cleanup()
-		os.Exit(1)
-	}
-
-	fmt.Println(selected)
-
-	if cfg.Pause == "on" {
-		slog.Debug("pausing before exit", "mode", cfg.Pause)
-		fmt.Fprintf(os.Stderr, "\nPress any key to exit...")
-		if isTTY {
-			buf := make([]byte, 1)
-			os.Stdin.Read(buf)
-		}
-		fmt.Fprintln(os.Stderr)
-	}
-
-	slog.Debug("gen-commit-msg finished")
 }
 
 func isTerminal() bool {
@@ -253,11 +335,34 @@ func formatOpenCodeError(err error) string {
 	return fmt.Sprintf("Error: failed to generate commit message: %v", err)
 }
 
-func openTTY() (tty *os.File, close func()) {
-	f, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+func openTTY() (*os.File, func()) {
+	f, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
-		slog.Debug("/dev/tty not available, falling back to stderr", "error", err)
-		return os.Stderr, func() {}
+		return os.Stdout, func() {}
 	}
 	return f, func() { f.Close() }
+}
+
+func logFilePath(logFile string) string {
+	if logFile == "" || logFile == "-" {
+		return ""
+	}
+	return logFile
+}
+
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+func pause(isTTY bool) {
+	slog.Debug("pausing before exit")
+	fmt.Fprintf(os.Stderr, "\nPress any key to exit...")
+	if isTTY {
+		buf := make([]byte, 1)
+		os.Stdin.Read(buf)
+	}
+	fmt.Fprintln(os.Stderr)
 }

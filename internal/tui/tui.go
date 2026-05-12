@@ -15,10 +15,42 @@ import (
 type state int
 
 const (
-	stateSpinner state = iota
+	stateProgress state = iota
+	stateSpinner
 	stateResult
 	stateError
 )
+
+type StepStatus int
+
+const (
+	StepPending StepStatus = iota
+	StepRunning
+	StepDone
+	StepFailed
+	StepWarning
+)
+
+type stepItem struct {
+	label  string
+	status StepStatus
+}
+
+type StepUpdateMsg struct {
+	Index  int
+	Status StepStatus
+	Detail string
+}
+
+func stepLabels() [5]string {
+	return [5]string{
+		"Starting OpenCode...",
+		"Creating session...",
+		"Generating commit messages...",
+		"Deleting session...",
+		"Stopping OpenCode server...",
+	}
+}
 
 type CommitItem struct {
 	Subject string
@@ -41,6 +73,9 @@ type Model struct {
 	quiet        bool
 	width        int
 	height       int
+	steps        []stepItem
+	stepDetail   string
+	logPath      string
 }
 
 func NewModel(subjectCount int, quiet bool) Model {
@@ -54,10 +89,17 @@ func NewModel(subjectCount int, quiet bool) Model {
 	l.SetFilteringEnabled(false)
 	l.DisableQuitKeybindings()
 
+	labels := stepLabels()
+	steps := make([]stepItem, 5)
+	for i := range steps {
+		steps[i] = stepItem{label: labels[i], status: StepPending}
+	}
+
 	return Model{
-		state:        stateSpinner,
+		state:        stateProgress,
 		spinner:      s,
 		list:         l,
+		steps:        steps,
 		subjectCount: subjectCount,
 		quiet:        quiet,
 	}
@@ -72,7 +114,10 @@ func (m Model) Init() tea.Cmd {
 	if m.quiet {
 		return nil
 	}
-	return m.spinner.Tick
+	if m.state == stateProgress {
+		return m.spinner.Tick
+	}
+	return nil
 }
 
 func SetMessages(messages []CommitItem) tea.Msg {
@@ -83,9 +128,27 @@ func SetError(err error) tea.Msg {
 	return generationResultMsg{err: err}
 }
 
+type setLogPathMsg struct {
+	path string
+}
+
+type allStepsDoneMsg struct{}
+
+func SetLogPath(path string) tea.Msg {
+	return setLogPathMsg{path: path}
+}
+
+func AllStepsDone() tea.Msg {
+	return allStepsDoneMsg{}
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.state == stateProgress && m.err != nil {
+			m.quitting = true
+			return m, tea.Quit
+		}
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			m.quitting = true
@@ -94,10 +157,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		w := msg.Width
-		if w < 40 {
-			w = 40
+		if msg.Width < 40 {
+			m.err = fmt.Errorf("terminal too narrow: %d columns. Minimum width: 40 columns", msg.Width)
+			m.quitting = true
+			return m, tea.Quit
 		}
+		w := msg.Width
 		h := msg.Height - 2
 		if h < 1 {
 			h = 1
@@ -132,9 +197,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			slog.Debug("switched to result state", "item_count", len(items))
 			return m, nil
 		}
+	case setLogPathMsg:
+		m.logPath = msg.path
+		return m, nil
+	case StepUpdateMsg:
+		if m.state == stateProgress {
+			if msg.Index >= 0 && msg.Index < len(m.steps) {
+				m.steps[msg.Index].status = msg.Status
+				m.stepDetail = msg.Detail
+			} else {
+				slog.Warn("step update with out-of-bounds index", "index", msg.Index, "len", len(m.steps))
+			}
+			if msg.Status == StepFailed {
+				m.err = fmt.Errorf("%s", msg.Detail)
+				slog.Debug("step failure", "index", msg.Index, "detail", msg.Detail)
+				return m, nil
+			}
+			if msg.Status == StepWarning {
+				slog.Debug("step warning", "index", msg.Index, "detail", msg.Detail)
+				return m, nil
+			}
+			return m, m.spinner.Tick
+		}
+	case allStepsDoneMsg:
+		if m.state == stateProgress {
+			m.state = stateResult
+			return m, nil
+		}
 	}
 
 	switch m.state {
+	case stateProgress:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 	case stateSpinner:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
@@ -167,6 +263,49 @@ func formatMessage(item CommitItem) string {
 
 func (m Model) View() string {
 	switch m.state {
+	case stateProgress:
+		if m.quiet {
+			return ""
+		}
+		bold := lipgloss.NewStyle().Bold(true)
+		faint := lipgloss.NewStyle().Faint(true)
+		doneIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render
+		failIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render
+		warnIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render
+		var b strings.Builder
+		for _, s := range m.steps {
+			b.WriteString("\n  ")
+			switch s.status {
+			case StepPending:
+				b.WriteString(faint.Render("  "))
+				b.WriteString(" ")
+				b.WriteString(faint.Render(s.label))
+				continue
+			case StepRunning:
+				b.WriteString(m.spinner.View())
+				b.WriteString(" ")
+				b.WriteString(bold.Render(s.label))
+				continue
+			case StepDone:
+				b.WriteString(doneIcon("✓"))
+			case StepFailed:
+				b.WriteString(failIcon("✗"))
+			case StepWarning:
+				b.WriteString(warnIcon("⚠"))
+			}
+			b.WriteString(" ")
+			b.WriteString(faint.Render(s.label))
+		}
+		if m.stepDetail != "" {
+			b.WriteString("\n\n  ")
+			b.WriteString(m.stepDetail)
+		}
+		if m.logPath != "" {
+			b.WriteString("\n  Details: ")
+			b.WriteString(m.logPath)
+		}
+		b.WriteString("\n")
+		return b.String()
 	case stateSpinner:
 		if m.quiet {
 			return ""

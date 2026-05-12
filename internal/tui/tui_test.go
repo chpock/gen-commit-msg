@@ -10,8 +10,8 @@ import (
 
 func TestModelInit(t *testing.T) {
 	m := NewModel(5, false)
-	if m.state != stateSpinner {
-		t.Error("initial state should be spinner")
+	if m.state != stateProgress {
+		t.Error("initial state should be progress")
 	}
 	if m.subjectCount != 5 {
 		t.Errorf("subjectCount = %d, want 5", m.subjectCount)
@@ -23,8 +23,8 @@ func TestModelInit(t *testing.T) {
 
 func TestModelInitQuiet(t *testing.T) {
 	m := NewModel(5, true)
-	if m.state != stateSpinner {
-		t.Error("initial state should be spinner")
+	if m.state != stateProgress {
+		t.Error("initial state should be progress")
 	}
 	if !m.quiet {
 		t.Error("quiet should be true")
@@ -155,6 +155,7 @@ func TestFormatMessageWithBody(t *testing.T) {
 
 func TestSpinnerView(t *testing.T) {
 	m := NewModel(5, false)
+	m.state = stateSpinner
 	v := m.View()
 	if !contains(v, "Generating commit messages") {
 		t.Errorf("spinner view missing label: %q", v)
@@ -163,6 +164,7 @@ func TestSpinnerView(t *testing.T) {
 
 func TestSpinnerViewQuiet(t *testing.T) {
 	m := NewModel(5, true)
+	m.state = stateSpinner
 	v := m.View()
 	if contains(v, "Generating commit messages") {
 		t.Errorf("quiet spinner view should suppress label, got: %q", v)
@@ -223,6 +225,231 @@ func TestCommitItemSatisfiesListItem(t *testing.T) {
 	}
 }
 
+func TestStepStatusValues(t *testing.T) {
+	if StepPending != 0 {
+		t.Error("StepPending should be 0 (zero value)")
+	}
+	if StepRunning != 1 {
+		t.Error("StepRunning should be 1")
+	}
+	if StepDone != 2 {
+		t.Error("StepDone should be 2")
+	}
+	if StepFailed != 3 {
+		t.Error("StepFailed should be 3")
+	}
+	if StepWarning != 4 {
+		t.Error("StepWarning should be 4")
+	}
+}
+
+func TestStepLabels(t *testing.T) {
+	labels := stepLabels()
+	if len(labels) != 5 {
+		t.Fatalf("expected 5 step labels, got %d", len(labels))
+	}
+	if labels[0] != "Starting OpenCode..." {
+		t.Errorf("step 0 label = %q", labels[0])
+	}
+	if labels[1] != "Creating session..." {
+		t.Errorf("step 1 label = %q", labels[1])
+	}
+	if labels[2] != "Generating commit messages..." {
+		t.Errorf("step 2 label = %q", labels[2])
+	}
+	if labels[3] != "Deleting session..." {
+		t.Errorf("step 3 label = %q", labels[3])
+	}
+	if labels[4] != "Stopping OpenCode server..." {
+		t.Errorf("step 4 label = %q", labels[4])
+	}
+}
+
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
+}
+
+func TestProgressStateInit(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	cmd := m.Init()
+	if cmd == nil {
+		t.Error("Init in progress state should return spinner tick")
+	}
+}
+
+func TestProgressViewShowsAllSteps(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	labels := stepLabels()
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: labels[i], status: StepPending}
+	}
+	v := m.View()
+	for _, label := range labels {
+		if !contains(v, label) {
+			t.Errorf("progress view missing label: %q", label)
+		}
+	}
+}
+
+func TestStepUpdateChangesStatus(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	labels := stepLabels()
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: labels[i], status: StepPending}
+	}
+	msg := StepUpdateMsg{Index: 0, Status: StepRunning}
+	updated, _ := m.Update(msg)
+	if updated.(Model).steps[0].status != StepRunning {
+		t.Errorf("step 0 status = %v, want StepRunning", updated.(Model).steps[0].status)
+	}
+}
+
+func TestProgressDoneAllStepsTransitionsToResult(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepDone}
+	}
+	msg := allStepsDoneMsg{}
+	updated, _ := m.Update(msg)
+	if updated.(Model).state != stateResult {
+		t.Errorf("state = %v, want stateResult after all steps done", updated.(Model).state)
+	}
+}
+
+func TestStepFailureShowsError(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	labels := stepLabels()
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: labels[i], status: StepPending}
+	}
+	msg := StepUpdateMsg{Index: 2, Status: StepFailed, Detail: "connection refused"}
+	updated, _ := m.Update(msg)
+	if updated.(Model).steps[2].status != StepFailed {
+		t.Error("step 2 should be failed")
+	}
+	if updated.(Model).stepDetail != "connection refused" {
+		t.Errorf("stepDetail = %q, want %q", updated.(Model).stepDetail, "connection refused")
+	}
+	v := updated.(Model).View()
+	if !contains(v, "connection refused") {
+		t.Errorf("progress view missing error detail: %q", v)
+	}
+}
+
+func TestProgressViewQuiet(t *testing.T) {
+	m := NewModel(5, true)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepPending}
+	}
+	v := m.View()
+	if v != "" {
+		t.Errorf("quiet progress view should be empty, got %q", v)
+	}
+}
+
+func TestSetLogPathMsg(t *testing.T) {
+	msg := SetLogPath("/tmp/test.log")
+	lp, ok := msg.(setLogPathMsg)
+	if !ok {
+		t.Fatal("SetLogPath should return setLogPathMsg")
+	}
+	if lp.path != "/tmp/test.log" {
+		t.Errorf("path = %q, want /tmp/test.log", lp.path)
+	}
+}
+
+func TestProgressViewShowsLogPath(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepPending}
+	}
+	m.logPath = "/tmp/test.log"
+	m.stepDetail = "something failed"
+	m.steps[0].status = StepFailed
+	v := m.View()
+	if !contains(v, "/tmp/test.log") {
+		t.Errorf("progress view missing log path: %q", v)
+	}
+}
+
+func TestAllStepsDoneMsg(t *testing.T) {
+	msg := AllStepsDone()
+	_, ok := msg.(allStepsDoneMsg)
+	if !ok {
+		t.Fatal("AllStepsDone should return allStepsDoneMsg")
+	}
+}
+
+func TestKeyQuitOnFailedStep(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	labels := stepLabels()
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: labels[i], status: StepPending}
+	}
+	m.steps[0].status = StepFailed
+	m.err = fmt.Errorf("test error")
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !updated.(Model).quitting {
+		t.Error("should set quitting on keypress with failed step")
+	}
+	if cmd == nil {
+		t.Error("should return tea.Quit command")
+	}
+}
+
+func TestStepUpdateOutOfBoundsIsIgnored(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepPending}
+	}
+	msg := StepUpdateMsg{Index: 99, Status: StepRunning}
+	updated, _ := m.Update(msg)
+	for _, s := range updated.(Model).steps {
+		if s.status != StepPending {
+			t.Errorf("out-of-bounds update should not change any step, got %v", s.status)
+		}
+	}
+	if updated.(Model).stepDetail != "" {
+		t.Errorf("out-of-bounds update should not set stepDetail, got %q", updated.(Model).stepDetail)
+	}
+
+	msg2 := StepUpdateMsg{Index: -1, Status: StepFailed, Detail: "should not appear"}
+	updated2, _ := m.Update(msg2)
+	if updated2.(Model).stepDetail != "" {
+		t.Errorf("out-of-bounds update with Detail should not set stepDetail, got %q", updated2.(Model).stepDetail)
+	}
+}
+
+func TestSpinnerTickInProgressState(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepPending}
+	}
+	// Simulate a spinner tick arriving in progress state.
+	cmd := m.spinner.Tick
+	tickMsg := cmd()
+	updated, _ := m.Update(tickMsg)
+	// Should not panic; model should remain in progress state.
+	if updated.(Model).state != stateProgress {
+		t.Errorf("state should remain stateProgress after tick, got %v", updated.(Model).state)
+	}
 }

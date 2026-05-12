@@ -307,21 +307,6 @@ func main() {
 		pauseExit(0, false)
 	}
 
-	if cfg.Quiet && cfg.SubjectCount == 1 {
-		slog.Debug("quiet single-subject mode")
-		messages, err := oc.GenerateMessages(ctx, sessionID, genParams)
-		if err != nil {
-			slog.Error("failed to generate messages", "error", err)
-			fmt.Fprintln(os.Stderr, formatOpenCodeError(err))
-			cleanup()
-			pauseExit(1, true)
-		}
-		slog.Info("messages generated", "count", len(messages))
-		if len(messages) > 0 {
-			fmt.Println(formatMessageFromOC(messages[0]))
-		}
-		pauseExit(0, false)
-	}
 }
 
 func isTerminal() bool {

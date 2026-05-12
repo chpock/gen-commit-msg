@@ -24,8 +24,8 @@ func TestParseFlagsDefaults(t *testing.T) {
 	if cfg.Agent != "gen-commit-msg" {
 		t.Errorf("Agent = %q, want gen-commit-msg", cfg.Agent)
 	}
-	if cfg.LogLevel != "error" {
-		t.Errorf("LogLevel = %q, want error", cfg.LogLevel)
+	if cfg.LogLevel != "none" {
+		t.Errorf("LogLevel = %q, want none", cfg.LogLevel)
 	}
 	if cfg.Pause != "on-error" {
 		t.Errorf("Pause = %q, want on-error", cfg.Pause)

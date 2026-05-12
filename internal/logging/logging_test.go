@@ -18,10 +18,12 @@ func TestParseLevel(t *testing.T) {
 		{"info", slog.LevelInfo},
 		{"warn", slog.LevelWarn},
 		{"error", slog.LevelError},
+		{"none", LevelNone},
 		{"DEBUG", slog.LevelDebug},
 		{"INFO", slog.LevelInfo},
 		{"WARN", slog.LevelWarn},
 		{"ERROR", slog.LevelError},
+		{"NONE", LevelNone},
 	}
 	for _, tt := range tests {
 		got := ParseLevel(tt.input)
@@ -38,6 +40,14 @@ func TestParseLevelInvalid(t *testing.T) {
 	if got := ParseLevel(""); got != slog.LevelError {
 		t.Errorf("ParseLevel(\"\") = %v, want %v (default)", got, slog.LevelError)
 	}
+}
+
+func TestSetupFromConfigNone(t *testing.T) {
+	err := SetupFromConfig("none", "")
+	if err != nil {
+		t.Fatalf("SetupFromConfig(\"none\", \"\"): %v", err)
+	}
+	slog.Info("should not appear anywhere")
 }
 
 func TestSetupHandlerLevelFiltering(t *testing.T) {

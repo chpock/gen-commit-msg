@@ -3,12 +3,14 @@ Date: 2026-05-12
 Author: chpock
 Surfaces: single-screen-ui
 
-Product spec approved - round 2 - 2026-05-12
+Product spec approved - round 3 - 2026-05-12
 
 Deep-discovery round 1 classification:
 - (S) goroutine-vs-tea.Cmd architecture unspecified
 - (O) no per-step error messages defined
 - (R) 300ms auto-transition only in UX spec
+
+Deep-discovery pass complete - round 1 - 2026-05-12
 
 ## Problem
 Currently, when the user runs `gen-commit-msg`, there is no feedback during server startup, session creation, and cleanup steps. The only visual feedback is a "Generating commit messages..." spinner that appears after the server and session are already set up. Users are left staring at a blank terminal for 5-30 seconds with no indication of what's happening.
@@ -34,7 +36,7 @@ Currently, when the user runs `gen-commit-msg`, there is no feedback during serv
 ### Approach A - Single TUI with progress phase
 Add a new `stateProgress` state to the existing TUI model. The progress view displays all 5 steps as a vertical list, each with a status indicator. The TUI starts earlier — before server initialization. A goroutine in main.go executes steps 1-5 sequentially, sending step-transition messages to the TUI via `p.Send()`. The TUI model remains a pure view — it holds no references to server, client, or cleanup logic. After all steps complete, the TUI transitions to the message selection view.
 
-Architecture contract: main.go is the orchestrator; the TUI model is a view that renders step states and forwards user input. Step execution and cleanup live outside the TUI.
+Architecture contract: main.go is the orchestrator; the TUI model is a view that renders step states and forwards user input. Step execution and cleanup live outside the TUI. The goroutine starts execution after the first `View()` renders — a small delay or `tea.Batch` init ensures the initial progress frame is painted before any step transitions arrive.
 
 Trade-offs: Moderate implementation cost; restructures `main.go` orchestration; uses established bubbletea goroutine+p.Send() pattern; highly reversible; TUI model remains testable without server/client dependencies.
 
@@ -59,12 +61,15 @@ Approach A — a single TUI with a progress phase. It's the natural fit for bubb
 | 5 | Stopping OpenCode server... |
 
 ## Visual states per step
-- **Pending**: dimmed label
-- **Running**: spinner + bright label
+- **Pending**: dimmed label (SGR 2 faint)
+- **Running**: spinner + bright label (SGR 1 bold)
 - **Done**: checkmark ✓ + dimmed label
 - **Failed**: cross ✗ + dimmed label
+- **Warning**: warning sign ⚠ + dimmed label (cleanup step failure after successful generation)
 
-**Unicode fallback**: ✓/✗ are Unicode characters. If the terminal does not support Unicode, fall back to `[OK]` for done and `[FAIL]` for failed.
+**SGR fallback**: On terminals without SGR support, running uses `>` prefix, pending/done use `  ` prefix.
+
+**Unicode fallback**: ✓/✗/⚠ are Unicode characters. If the terminal does not support Unicode, fall back to `[OK]` for done, `[FAIL]` for failed, `[WARN]` for warning.
 
 ## Per-step error messages
 Each step failure must display a step-specific error message below the step list:
@@ -86,11 +91,14 @@ The `<detail>` portion is the underlying error text from the operation.
 
 ## Failure cleanup
 On any step failure:
-1. The error message appears below the step list
+1. The error message + log-file reference ("Details: <log-path>") appear below the step list
 2. Remaining pending steps stay dimmed — no further execution of the failed pipeline
-3. The user presses any key to dismiss
-4. After the TUI exits (`p.Run()` returns), main.go runs cleanup (session delete, server stop) with a timeout
-5. The TUI does not block on cleanup — cleanup is a post-TUI concern
+3. After a 1-second debounce, the user dismisses with q, Esc, Enter or Ctrl+C
+4. main.go prints "Cleaning up..." to stderr, then runs cleanup (session delete 10s timeout, server stop 5s timeout)
+5. Program exits with error code 1
+
+**Cleanup warning (step 4/5 failure after successful generation)**:
+If step 3 succeeds but step 4 or 5 fails: show ⚠ (warning) on the failed step with a "Cleanup issue: <detail>" message. Auto-transition to message selection view — generated messages are still accessible. Cleanup timeout runs silently after program exit.
 
 ## Flow
 ```

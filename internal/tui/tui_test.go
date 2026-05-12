@@ -402,6 +402,7 @@ func TestKeyQuitOnFailedStep(t *testing.T) {
 		m.steps[i] = stepItem{label: labels[i], status: StepPending}
 	}
 	m.steps[0].status = StepFailed
+	m.err = fmt.Errorf("test error")
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if !updated.(Model).quitting {
 		t.Error("should set quitting on keypress with failed step")
@@ -427,6 +428,12 @@ func TestStepUpdateOutOfBoundsIsIgnored(t *testing.T) {
 	}
 	if updated.(Model).stepDetail != "" {
 		t.Errorf("out-of-bounds update should not set stepDetail, got %q", updated.(Model).stepDetail)
+	}
+
+	msg2 := StepUpdateMsg{Index: -1, Status: StepFailed, Detail: "should not appear"}
+	updated2, _ := m.Update(msg2)
+	if updated2.(Model).stepDetail != "" {
+		t.Errorf("out-of-bounds update with Detail should not set stepDetail, got %q", updated2.(Model).stepDetail)
 	}
 }
 

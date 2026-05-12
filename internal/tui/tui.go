@@ -145,14 +145,9 @@ func AllStepsDone() tea.Msg {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if m.state == stateProgress {
-			for _, s := range m.steps {
-				if s.status == StepFailed {
-					m.err = fmt.Errorf("%s", m.stepDetail)
-					m.quitting = true
-					return m, tea.Quit
-				}
-			}
+		if m.state == stateProgress && m.err != nil {
+			m.quitting = true
+			return m, tea.Quit
 		}
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
@@ -162,10 +157,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		w := msg.Width
-		if w < 40 {
-			w = 40
+		if msg.Width < 40 {
+			m.err = fmt.Errorf("terminal too narrow: %d columns. Minimum width: 40 columns", msg.Width)
+			m.quitting = true
+			return m, tea.Quit
 		}
+		w := msg.Width
 		h := msg.Height - 2
 		if h < 1 {
 			h = 1
@@ -207,12 +204,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state == stateProgress {
 			if msg.Index >= 0 && msg.Index < len(m.steps) {
 				m.steps[msg.Index].status = msg.Status
+				m.stepDetail = msg.Detail
 			} else {
 				slog.Warn("step update with out-of-bounds index", "index", msg.Index, "len", len(m.steps))
 			}
-			m.stepDetail = msg.Detail
-			if msg.Status == StepFailed || msg.Status == StepWarning {
-				slog.Debug("step transition", "index", msg.Index, "status", msg.Status, "detail", msg.Detail)
+			if msg.Status == StepFailed {
+				m.err = fmt.Errorf("%s", msg.Detail)
+				slog.Debug("step failure", "index", msg.Index, "detail", msg.Detail)
+				return m, nil
+			}
+			if msg.Status == StepWarning {
+				slog.Debug("step warning", "index", msg.Index, "detail", msg.Detail)
 				return m, nil
 			}
 			return m, m.spinner.Tick
@@ -265,23 +267,34 @@ func (m Model) View() string {
 		if m.quiet {
 			return ""
 		}
+		bold := lipgloss.NewStyle().Bold(true)
+		faint := lipgloss.NewStyle().Faint(true)
+		doneIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render
+		failIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render
+		warnIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render
 		var b strings.Builder
 		for _, s := range m.steps {
 			b.WriteString("\n  ")
 			switch s.status {
 			case StepPending:
-				b.WriteString("  ")
+				b.WriteString(faint.Render("  "))
+				b.WriteString(" ")
+				b.WriteString(faint.Render(s.label))
+				continue
 			case StepRunning:
 				b.WriteString(m.spinner.View())
+				b.WriteString(" ")
+				b.WriteString(bold.Render(s.label))
+				continue
 			case StepDone:
-				b.WriteString("✓")
+				b.WriteString(doneIcon("✓"))
 			case StepFailed:
-				b.WriteString("✗")
+				b.WriteString(failIcon("✗"))
 			case StepWarning:
-				b.WriteString("⚠")
+				b.WriteString(warnIcon("⚠"))
 			}
 			b.WriteString(" ")
-			b.WriteString(s.label)
+			b.WriteString(faint.Render(s.label))
 		}
 		if m.stepDetail != "" {
 			b.WriteString("\n\n  ")

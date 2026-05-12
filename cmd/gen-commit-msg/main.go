@@ -109,6 +109,7 @@ func main() {
 				if cleanupDone {
 					return
 				}
+				fmt.Fprintln(os.Stderr, "Cleaning up...")
 				if sessionID != "" && oc != nil {
 					delCtx, delCancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer delCancel()
@@ -195,6 +196,8 @@ func main() {
 			}
 
 			cleanupDone = true
+
+			time.Sleep(300 * time.Millisecond)
 
 			items := make([]tui.CommitItem, len(messages))
 			for i, msg := range messages {

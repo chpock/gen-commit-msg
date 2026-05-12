@@ -90,39 +90,55 @@ The `<detail>` portion is the underlying error text from the operation.
 - If the message count is 0, the TUI transitions to the error view ("no commit messages generated").
 
 ## Failure cleanup
-On any step failure:
-1. The error message + log-file reference ("Details: <log-path>") appear below the step list
-2. Remaining pending steps stay dimmed — no further execution of the failed pipeline
-3. After a 1-second debounce, the user dismisses with q, Esc, Enter or Ctrl+C
-4. main.go prints "Cleaning up..." to stderr, then runs cleanup (session delete 10s timeout, server stop 5s timeout)
-5. Program exits with error code 1
+Each step communicates its real execution status to the TUI. The goroutine in main.go runs all steps that can execute given their prerequisites:
 
-**Cleanup warning (step 4/5 failure after successful generation)**:
-If step 3 succeeds but step 4 or 5 fails: show ⚠ (warning) on the failed step with a "Cleanup issue: <detail>" message. Auto-transition to message selection view — generated messages are still accessible. Cleanup timeout runs silently after program exit.
+- Steps whose prerequisite failed are explicitly marked as **skipped** (`-`) by the goroutine
+- Cleanup steps (delete session, stop server) always run if their prerequisites exist, regardless of earlier failures, and show their real outcome (✓ / ⚠ / ✗)
+- The TUI model stays in progress state, accepting all step updates until it receives the terminal `allStepsDoneMsg`
+- On `allStepsDoneMsg`, if any step failed: transition to error view. Otherwise: transition to result view
+
+**Step dependency model**:
+| Step | Depends on | Skipped when |
+|------|-----------|--------------|
+| 0: Starting OpenCode | nothing | — |
+| 1: Creating session | step 0 | step 0 failed |
+| 2: Generating messages | step 1 | step 0 or 1 failed |
+| 3: Deleting session | step 1 (sessionID exists) | no session was created |
+| 4: Stopping server | step 0 (srv exists) | srv is nil |
+
+**On any step failure**:
+1. The error detail appears as `stepDetail` below the step list during progress
+2. Execution continues for all steps whose prerequisites are satisfied
+3. Cleanup steps execute and show their real status
+4. When `allStepsDoneMsg` arrives, the TUI transitions to the error view showing the first failure detail
+5. User dismisses with q, Esc, Enter or Ctrl+C
+
+**Cleanup warning (step 3/4 failure after successful generation)**:
+If step 2 succeeds but step 3 or 4 fails: show ⚠ (warning) on the failed step with a "Cleanup issue: <detail>" message. Auto-transition to message selection view — generated messages are still accessible.
 
 ## Flow
 ```
 [Progress View: all 5 steps shown]
-  Step 1: ⠋ Starting OpenCode...
-  Step 2:   Creating session...
-  Step 3:   Generating commit messages...
-  Step 4:   Deleting session...
-  Step 5:   Stopping OpenCode server...
-       ↓ (steps complete one by one)
-  Step 1: ✓ Starting OpenCode...
-  Step 2: ✓ Creating session...
-  Step 3: ✓ Generating commit messages...
-  Step 4: ✓ Deleting session...
-  Step 5: ✓ Stopping OpenCode server...
-       ↓ (300ms delay — auto-transition)
+  Step 0: ⠋ Starting OpenCode...
+  Step 1:   Creating session...
+  Step 2:   Generating commit messages...
+  Step 3:   Deleting session...
+  Step 4:   Stopping OpenCode server...
+       ↓ (steps complete one by one, goroutine sends status updates)
+  Step 0: ✓ Starting OpenCode...
+  Step 1: ✓ Creating session...
+  Step 2: ✓ Generating commit messages...
+  Step 3: ✓ Deleting session...
+  Step 4: ✓ Stopping OpenCode server...
+       ↓ (after AllStepsDone — auto-transition)
 [Message Selection TUI (existing)]
 
-Failure example:
-  Step 1: ✓ Starting OpenCode...
-  Step 2: ✗ Creating session...
-  Step 3:   Generating commit messages...  ← dimmed, never executes
-  Step 4:   Deleting session...            ← dimmed, never executes
-  Step 5:   Stopping OpenCode server...    ← dimmed, never executes
+Failure example (step 1 fails, step 4 cleanup succeeds):
+  Step 0: ✓ Starting OpenCode...
+  Step 1: ✗ Creating session...
+  Step 2: - Generating commit messages...   ← skipped (depends on step 1)
+  Step 3: - Deleting session...             ← skipped (no session)
+  Step 4: ✓ Stopping OpenCode server...     ← ran, real result shown
        Error: failed to create session: connection refused
        Press any key to exit.
 ```

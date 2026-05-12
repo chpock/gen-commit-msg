@@ -325,3 +325,17 @@ Design review complete - round 1 - 2026-05-12
 - **Hypothesis**: If the TUI successfully displayed the error (reached `stateError` and user dismissed it), then `main.go` after `p.Run()` must not re-display the error or re-pause — the user already acknowledged it.
 - **Fix**: Replaced `fmt.Fprintln(os.Stderr, ...) + pauseExit(1, true)` with `os.Exit(1)` in the `m.Error() != nil` block after `p.Run()`. Also removed redundant "Error: " prefix from four `StepUpdateMsg.Detail` strings (TUI view already adds "Error: " prefix). Improved `getStructuredJSON` error message: log raw JSON at DEBUG instead of embedding it in the error string.
 - **Regression coverage**: `make all` passes — all 8 packages green, go vet clean, golangci-lint 0 issues, binary builds. Direct manual test: run with invalid agent name → error shown once in TUI → single exit without re-prompt.
+
+---
+
+## Bug fix: step failure unconditionally skips all subsequent steps
+
+### Systematic-debugging record
+- **Root cause**: Two locations conspired — (1) `tui.go` unconditionally cascaded `StepSkipped` to all subsequent steps on any `StepFailed` and immediately transitioned to `stateError`, stopping further step updates; (2) `main.go` goroutine used early `return` on step 0/1/2 failure, triggering deferred cleanup that silently executed steps 3-4 without sending `StepUpdateMsg`. The TUI model assumed a rigid linear dependency chain where every later step depends on every earlier step, but in reality cleanup steps 3-4 must and do execute regardless.
+- **Falsifying test**: `TestExplicitStepSkippedAcceptedAfterFailure` — after step 1 fails, explicit `StepSkipped` for steps 2-3 and `StepDone` for step 4 are all accepted and reflected, then `allStepsDoneMsg` transitions to `stateError`.
+- **Hypothesis**: If the goroutine explicitly communicates the status of ALL steps (including skipped dependencies and real cleanup outcomes), and the TUI model accepts updates until a terminal `allStepsDoneMsg`, then every step will show its true execution status.
+- **Fix**:
+  - `tui.go`: Removed the unconditional `StepSkipped` cascade; removed immediate `stateError` transition on `StepFailed`; deferred error/result decision to `allStepsDoneMsg`
+  - `main.go` goroutine: Replaced early-`return` with explicit conditional flow (`step0OK`, `sessionOK` booleans); sends `StepSkipped` for steps whose prerequisite failed; runs cleanup steps 3-4 if prerequisites exist regardless of earlier failures; always sends `AllStepsDone()` at the end
+- **Regression coverage**: All 8 packages green (`make all`), 4 new tests added: `TestStepFailureDoesNotAutoSkipDependentSteps`, `TestAllStepsDoneWithFailureTransitionsToError`, `TestStepUpdateAcceptedAfterFailure`, `TestExplicitStepSkippedAcceptedAfterFailure`, `TestAllStepsDoneWithoutErrorGoesToResult`. Spec and UX spec updated to reflect actual behavior.
+- **Previously-dead code now live**: `allStepsDoneMsg` / `AllStepsDone()` (F7/D11) — now sent by the goroutine at the end of every execution path and drives the final state transition in the TUI model. The previous deferred cleanup (silent execution) is now explicit per-step status communication.

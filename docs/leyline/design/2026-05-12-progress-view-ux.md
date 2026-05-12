@@ -37,11 +37,11 @@ Design-interrogation pass complete - round 1 - 2026-05-12
 ### Flow 2 — Progress step failure (step 1 or 2)
 1. Progress view appears — all 5 steps pending
 2. A step transitions: pending → running → failed (✗)
-3. Error message + log-file reference appear below the step list
-4. Remaining pending steps stay dimmed (no further execution)
-5. After 1s debounce, dismiss with q, Esc, Enter or Ctrl+C → TUI exits
-6. main.go prints "Cleaning up..." to stderr, runs cleanup (session delete 10s, server stop 5s)
-7. Program exits with error code 1
+3. Error detail appears as stepDetail below the step list
+4. Steps that depend on the failed step are marked as skipped (`-`), sent explicitly by the goroutine
+5. Cleanup steps (delete session, stop server) run if their prerequisites exist and show their real outcome (✓ / ⚠ / ✗)
+6. When all steps report their final status (`allStepsDoneMsg`), the TUI transitions to error view showing the first failure
+7. Dismiss with q, Esc, Enter or Ctrl+C → program exits with error code 1
 
 ### Flow 2b — Cleanup warning (step 4 or 5 failure after successful generation)
 1. Steps 1-3 complete successfully (✓)
@@ -54,17 +54,16 @@ Design-interrogation pass complete - round 1 - 2026-05-12
 ### Flow 3 — Generation failure (step 3)
 1. Steps 1-2 complete successfully (✓)
 2. Step 3 transitions: running → failed (✗)
-3. Error message + log-file reference appear below the step list
-4. Steps 4-5 stay dimmed as pending
-5. After 1s debounce, dismiss with q, Esc, Enter or Ctrl+C → TUI exits
-6. main.go prints "Cleaning up..." to stderr, runs cleanup (session delete 10s, server stop 5s)
-7. Program exits with error code 1
+3. Error detail appears as stepDetail below the step list
+4. Cleanup steps 4-5 run and show their real outcome (✓ / ⚠ / ✗) — delete session and stop server
+5. When all steps report their final status (`allStepsDoneMsg`), the TUI transitions to error view showing the generation failure
+6. Dismiss with q, Esc, Enter or Ctrl+C → program exits with error code 1
 
 ## State matrix
 
 | Surface | Loading | Error | Success | Empty |
 |---------|---------|-------|---------|-------|
-| Progress view | All 5 steps shown; current step shows spinner; completed steps show ✓; pending steps dimmed | Failed step ✗ + error text + "Details: <log-path>" below list; remaining steps dimmed; 1s debounce, dismiss with q/Esc/Enter/Ctrl+C | All steps ✓; auto-transition to message selection after 300ms; cleanup warnings (⚠) show inline but still auto-transition | Steps all ✓; inline error "no commit messages generated" below list; same dismiss behavior |
+| Progress view | All 5 steps shown; current step shows spinner; completed steps show ✓; pending steps dimmed | Failed step ✗ + error detail below list; dependent steps show `-` (skipped); cleanup steps show their real outcome (✓ / ⚠ / ✗); after `allStepsDoneMsg` transitions to error view; dismiss with q/Esc/Enter/Ctrl+C | All steps ✓; auto-transition to message selection after 300ms; cleanup warnings (⚠) show inline but still auto-transition | Steps all ✓; inline error "no commit messages generated" below list; same dismiss behavior |
 | Message selection | N/A — preceded by progress view | N/A — all errors handled inline on progress view | List of messages; ↑↓ to navigate; Enter to select; selected message printed to stdout | N/A — zero messages handled on progress view |
 
 Permission-denied, Offline: N/A — local CLI tool, no network auth required.

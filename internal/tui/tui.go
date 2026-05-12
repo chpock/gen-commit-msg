@@ -206,29 +206,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Index >= 0 && msg.Index < len(m.steps) {
 				m.steps[msg.Index].status = msg.Status
 				m.stepDetail = msg.Detail
-				if msg.Status == StepFailed {
-					for i := msg.Index + 1; i < len(m.steps); i++ {
-						m.steps[i].status = StepSkipped
-					}
-				}
 			} else {
 				slog.Warn("step update with out-of-bounds index", "index", msg.Index, "len", len(m.steps))
 			}
 			if msg.Status == StepFailed {
 				m.err = fmt.Errorf("%s", msg.Detail)
-				m.state = stateError
 				slog.Debug("step failure", "index", msg.Index, "detail", msg.Detail)
-				return m, nil
 			}
 			if msg.Status == StepWarning {
 				slog.Debug("step warning", "index", msg.Index, "detail", msg.Detail)
-				return m, nil
 			}
 			return m, m.spinner.Tick
 		}
 	case allStepsDoneMsg:
 		if m.state == stateProgress {
-			m.state = stateResult
+			if m.err != nil {
+				m.state = stateError
+			} else {
+				m.state = stateResult
+			}
 			return m, nil
 		}
 	}

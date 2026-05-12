@@ -342,6 +342,12 @@ func TestStepFailureShowsError(t *testing.T) {
 	if updated.(Model).stepDetail != "connection refused" {
 		t.Errorf("stepDetail = %q, want %q", updated.(Model).stepDetail, "connection refused")
 	}
+	if updated.(Model).err == nil || updated.(Model).err.Error() != "connection refused" {
+		t.Error("m.err should be set to the failure detail")
+	}
+	if updated.(Model).state != stateProgress {
+		t.Errorf("state = %v, want stateProgress (error state deferred to allStepsDoneMsg)", updated.(Model).state)
+	}
 	v := updated.(Model).View()
 	if !contains(v, "connection refused") {
 		t.Errorf("progress view missing error detail: %q", v)
@@ -463,7 +469,7 @@ func TestStepSkippedValue(t *testing.T) {
 	}
 }
 
-func TestStepFailureMarksSubsequentStepsAsSkipped(t *testing.T) {
+func TestStepFailureDoesNotAutoSkipDependentSteps(t *testing.T) {
 	m := NewModel(5, false)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
@@ -476,11 +482,12 @@ func TestStepFailureMarksSubsequentStepsAsSkipped(t *testing.T) {
 	if updated.(Model).steps[2].status != StepFailed {
 		t.Error("step 2 should be StepFailed")
 	}
-	if updated.(Model).steps[3].status != StepSkipped {
-		t.Errorf("step 3 status = %v, want StepSkipped", updated.(Model).steps[3].status)
+	// Subsequent steps are NOT auto-skipped — the goroutine explicitly controls skip status.
+	if updated.(Model).steps[3].status != StepPending {
+		t.Errorf("step 3 status = %v, want StepPending (not auto-skipped)", updated.(Model).steps[3].status)
 	}
-	if updated.(Model).steps[4].status != StepSkipped {
-		t.Errorf("step 4 status = %v, want StepSkipped", updated.(Model).steps[4].status)
+	if updated.(Model).steps[4].status != StepPending {
+		t.Errorf("step 4 status = %v, want StepPending (not auto-skipped)", updated.(Model).steps[4].status)
 	}
 	// Steps before the failure should be unaffected.
 	if updated.(Model).steps[0].status != StepPending {
@@ -488,6 +495,13 @@ func TestStepFailureMarksSubsequentStepsAsSkipped(t *testing.T) {
 	}
 	if updated.(Model).steps[1].status != StepPending {
 		t.Errorf("step 1 status = %v, want StepPending", updated.(Model).steps[1].status)
+	}
+	// Error should be set but state stays in progress.
+	if updated.(Model).err == nil || updated.(Model).err.Error() != "connection refused" {
+		t.Error("m.err should be set to the failure detail")
+	}
+	if updated.(Model).state != stateProgress {
+		t.Errorf("state = %v, want stateProgress (error state deferred to allStepsDoneMsg)", updated.(Model).state)
 	}
 }
 
@@ -516,5 +530,94 @@ func TestErrorViewShowsSteps(t *testing.T) {
 	}
 	if !contains(v, "Press any key to exit") {
 		t.Errorf("error view missing exit prompt: %q", v)
+	}
+}
+
+func TestAllStepsDoneWithFailureTransitionsToError(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepDone}
+	}
+	m.steps[1].status = StepFailed
+	m.err = fmt.Errorf("session creation failed")
+	msg := allStepsDoneMsg{}
+	updated, _ := m.Update(msg)
+	if updated.(Model).state != stateError {
+		t.Errorf("state = %v, want stateError when a step failed", updated.(Model).state)
+	}
+}
+
+func TestStepUpdateAcceptedAfterFailure(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepPending}
+	}
+	failMsg := StepUpdateMsg{Index: 1, Status: StepFailed, Detail: "session error"}
+	updated, _ := m.Update(failMsg)
+	if updated.(Model).state != stateProgress {
+		t.Errorf("state = %v, want stateProgress after failure", updated.(Model).state)
+	}
+	doneMsg := StepUpdateMsg{Index: 4, Status: StepDone}
+	updated2, _ := updated.(Model).Update(doneMsg)
+	if updated2.(Model).steps[4].status != StepDone {
+		t.Errorf("step 4 status = %v, want StepDone (update after failure should be accepted)", updated2.(Model).steps[4].status)
+	}
+	if updated2.(Model).state != stateProgress {
+		t.Errorf("state = %v, still want stateProgress", updated2.(Model).state)
+	}
+	if updated2.(Model).err == nil || updated2.(Model).err.Error() != "session error" {
+		t.Error("m.err should still hold the first failure detail")
+	}
+}
+
+func TestExplicitStepSkippedAcceptedAfterFailure(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepPending}
+	}
+	failMsg := StepUpdateMsg{Index: 1, Status: StepFailed, Detail: "session error"}
+	updated, _ := m.Update(failMsg)
+	skipMsg := StepUpdateMsg{Index: 2, Status: StepSkipped}
+	updated2, _ := updated.(Model).Update(skipMsg)
+	skipMsg2 := StepUpdateMsg{Index: 3, Status: StepSkipped}
+	updated3, _ := updated2.(Model).Update(skipMsg2)
+	doneMsg := StepUpdateMsg{Index: 4, Status: StepDone}
+	updated4, _ := updated3.(Model).Update(doneMsg)
+	if updated4.(Model).steps[1].status != StepFailed {
+		t.Error("step 1 should be StepFailed")
+	}
+	if updated4.(Model).steps[2].status != StepSkipped {
+		t.Error("step 2 should be StepSkipped (explicitly sent by goroutine)")
+	}
+	if updated4.(Model).steps[3].status != StepSkipped {
+		t.Error("step 3 should be StepSkipped (explicitly sent by goroutine)")
+	}
+	if updated4.(Model).steps[4].status != StepDone {
+		t.Error("step 4 should be StepDone (cleanup ran)")
+	}
+	allDone := allStepsDoneMsg{}
+	updated5, _ := updated4.(Model).Update(allDone)
+	if updated5.(Model).state != stateError {
+		t.Errorf("state = %v, want stateError (step 1 failed)", updated5.(Model).state)
+	}
+}
+
+func TestAllStepsDoneWithoutErrorGoesToResult(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepDone}
+	}
+	msg := allStepsDoneMsg{}
+	updated, _ := m.Update(msg)
+	if updated.(Model).state != stateResult {
+		t.Errorf("state = %v, want stateResult when no failures", updated.(Model).state)
 	}
 }

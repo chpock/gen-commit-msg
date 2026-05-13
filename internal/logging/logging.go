@@ -38,26 +38,31 @@ func Setup(w io.Writer, level slog.Level) {
 	slog.SetDefault(slog.New(handler))
 }
 
-func SetupFromConfig(logLevel, logFile string) error {
+func SetupFromConfig(logLevel, logFile string) (func() error, error) {
 	level := ParseLevel(logLevel)
 
 	var w io.Writer
+	var closer func() error
+
 	if strings.EqualFold(logLevel, "none") {
 		w = io.Discard
+		closer = func() error { return nil }
 	} else {
 		switch logFile {
 		case "", "-":
 			w = os.Stderr
+			closer = func() error { return nil }
 		default:
 			f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			w = f
+			closer = f.Close
 		}
 	}
 
 	handler := newHandler(w, level)
 	slog.SetDefault(slog.New(handler))
-	return nil
+	return closer, nil
 }

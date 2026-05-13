@@ -33,10 +33,12 @@ func main() {
 		os.Exit(2)
 	}
 
-	if err := logging.SetupFromConfig(cfg.LogLevel, cfg.LogFile); err != nil {
+	closeLog, err := logging.SetupFromConfig(cfg.LogLevel, cfg.LogFile)
+	if err != nil {
 		fmtError("Error: failed to configure logging: %v\n", err)
 		os.Exit(2)
 	}
+	defer func() { _ = closeLog() }()
 
 	slog.Debug("gen-commit-msg starting", "version", version,
 		"subject_count", cfg.SubjectCount, "body", cfg.Body,

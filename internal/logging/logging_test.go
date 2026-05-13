@@ -43,7 +43,8 @@ func TestParseLevelInvalid(t *testing.T) {
 }
 
 func TestSetupFromConfigNone(t *testing.T) {
-	err := SetupFromConfig("none", "")
+	closeLog, err := SetupFromConfig("none", "")
+	defer func() { _ = closeLog() }()
 	if err != nil {
 		t.Fatalf("SetupFromConfig(\"none\", \"\"): %v", err)
 	}
@@ -133,11 +134,14 @@ func TestSetupFromConfigFile(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "app.log")
 
-	err := SetupFromConfig("info", logPath)
+	closeLog, err := SetupFromConfig("info", logPath)
 	if err != nil {
 		t.Fatalf("SetupFromConfig: %v", err)
 	}
-	t.Cleanup(func() { _ = os.Remove(logPath) })
+	t.Cleanup(func() {
+		_ = closeLog()
+		_ = os.Remove(logPath)
+	})
 
 	slog.Info("config file msg")
 	// The handler writes asynchronously, so we need to check the file
@@ -153,7 +157,8 @@ func TestSetupFromConfigFile(t *testing.T) {
 func TestSetupFromConfigStdout(t *testing.T) {
 	saved := slog.Default()
 
-	err := SetupFromConfig("warn", "-")
+	closeLog, err := SetupFromConfig("warn", "-")
+	defer func() { _ = closeLog() }()
 	if err != nil {
 		t.Fatalf("SetupFromConfig: %v", err)
 	}
@@ -168,7 +173,8 @@ func TestSetupFromConfigStdout(t *testing.T) {
 func TestSetupFromConfigDefault(t *testing.T) {
 	saved := slog.Default()
 
-	err := SetupFromConfig("error", "")
+	closeLog, err := SetupFromConfig("error", "")
+	defer func() { _ = closeLog() }()
 	if err != nil {
 		t.Fatalf("SetupFromConfig: %v", err)
 	}

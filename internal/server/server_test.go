@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"os/exec"
 	"strings"
 	"testing"
@@ -23,7 +24,9 @@ func TestServerInterface(t *testing.T) {
 
 func TestParseListenURL_Success(t *testing.T) {
 	input := strings.NewReader("some log\nopencode server listening on http://127.0.0.1:12345\nmore log\n")
-	url, err := parseListenURL(input, 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	url, err := parseListenURL(input, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -34,7 +37,9 @@ func TestParseListenURL_Success(t *testing.T) {
 
 func TestParseListenURL_NoMatch(t *testing.T) {
 	input := strings.NewReader("no match here\njust logs\n")
-	_, err := parseListenURL(input, 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	_, err := parseListenURL(input, ctx)
 	if err == nil {
 		t.Fatal("expected error for no match")
 	}

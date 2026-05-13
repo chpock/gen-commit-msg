@@ -41,10 +41,15 @@ func New() *ProcessServer {
 }
 
 func (s *ProcessServer) Start(ctx context.Context) (string, error) {
-	cmdCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	s.cancel = cancel
+	// Use a background context for the server's lifetime, to be cancelled by Stop()
+	serverCtx, serverCancel := context.WithCancel(context.Background())
+	s.cancel = serverCancel // Store for Stop() to call
 
-	s.cmd = exec.CommandContext(cmdCtx, "opencode", "serve", "--hostname", "127.0.0.1", "--port", "0")
+	// Use a separate context with a timeout for the startup phase (URL parsing and health check)
+	startupCtx, startupCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer startupCancel() // Ensure this context is cancelled when Start() exits
+
+	s.cmd = exec.CommandContext(serverCtx, "opencode", "serve", "--hostname", "127.0.0.1", "--port", "0")
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{
 		Pdeathsig: syscall.SIGKILL,
 		Setpgid:   true,
@@ -55,7 +60,7 @@ func (s *ProcessServer) Start(ctx context.Context) (string, error) {
 	stdout, err := s.cmd.StdoutPipe()
 	if err != nil {
 		slog.Error("failed to create stdout pipe", "error", err)
-		cancel()
+		serverCancel()
 		return "", fmt.Errorf("stdout pipe: %w", err)
 	}
 	var stderrBuf bytes.Buffer
@@ -63,14 +68,15 @@ func (s *ProcessServer) Start(ctx context.Context) (string, error) {
 
 	if err := s.cmd.Start(); err != nil {
 		slog.Error("failed to start opencode process", "error", err)
-		cancel()
+		serverCancel()
 		if errors.Is(err, exec.ErrNotFound) {
 			return "", fmt.Errorf("%w: %w", ErrOpenCodeNotFound, err)
 		}
 		return "", fmt.Errorf("start opencode: %w", err)
 	}
 
-	baseURL, err := parseListenURL(stdout, 30*time.Second)
+	// Pass startupCtx to parseListenURL and healthCheck
+	baseURL, err := parseListenURL(stdout, startupCtx)
 	if err != nil {
 		slog.Error("failed to parse listen URL", "error", err)
 		_ = s.Stop()
@@ -83,7 +89,7 @@ func (s *ProcessServer) Start(ctx context.Context) (string, error) {
 	slog.Debug("parsed listen URL", "url", baseURL)
 	s.baseURL = baseURL
 
-	if err := healthCheck(ctx, baseURL); err != nil {
+	if err := healthCheck(startupCtx, baseURL); err != nil {
 		slog.Error("health check failed", "url", baseURL, "error", err)
 		_ = s.Stop()
 		return "", fmt.Errorf("health check: %w", err)
@@ -93,7 +99,7 @@ func (s *ProcessServer) Start(ctx context.Context) (string, error) {
 	return baseURL, nil
 }
 
-func parseListenURL(r io.Reader, timeout time.Duration) (string, error) {
+func parseListenURL(r io.Reader, ctx context.Context) (string, error) {
 	ch := make(chan string, 1)
 	errCh := make(chan error, 1)
 
@@ -117,8 +123,12 @@ func parseListenURL(r io.Reader, timeout time.Duration) (string, error) {
 		return url, nil
 	case err := <-errCh:
 		return "", err
-	case <-time.After(timeout):
-		return "", ErrServerTimeout
+	case <-ctx.Done():
+		slog.Debug("context done while waiting for listen URL", "err", ctx.Err())
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return "", ErrServerTimeout
+		}
+		return "", fmt.Errorf("%w: %w", ErrServerTimeout, ctx.Err())
 	}
 }
 

@@ -1,0 +1,19 @@
+{
+  "info": {
+    "id": "msg_null_001",
+    "sessionID": "mock_sess_001",
+    "role": "assistant",
+    "mode": "gen-commit-msg",
+    "modelID": "deepseek-v4-pro",
+    "providerID": "opencode-go",
+    "parentID": "parent_001",
+    "path": {"cwd": "/tmp/test-repo", "root": "/tmp/test-repo"},
+    "time": {"created": 1715616002, "completed": 1715616005},
+    "tokens": {"input": 200, "output": 80, "reasoning": 50,
+               "cache": {"read": 0, "write": 0}},
+    "cost": 0.015,
+    "system": [],
+    "structured": null
+  },
+  "parts": []
+}

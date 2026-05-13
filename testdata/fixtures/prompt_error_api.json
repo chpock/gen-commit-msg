@@ -1,0 +1,26 @@
+{
+  "info": {
+    "id": "msg_api_err_001",
+    "sessionID": "mock_sess_001",
+    "role": "assistant",
+    "mode": "gen-commit-msg",
+    "modelID": "deepseek-v4-pro",
+    "providerID": "opencode-go",
+    "parentID": "parent_001",
+    "path": {"cwd": "/tmp/test-repo", "root": "/tmp/test-repo"},
+    "time": {"created": 1715616002, "completed": 1715616003},
+    "tokens": {"input": 0, "output": 0, "reasoning": 0,
+               "cache": {"read": 0, "write": 0}},
+    "cost": 0,
+    "system": [],
+    "error": {
+      "name": "APIError",
+      "data": {
+        "message": "Error from provider (DeepSeek): deepseek-reasoner does not support this tool_choice",
+        "statusCode": 400,
+        "isRetryable": false
+      }
+    }
+  },
+  "parts": []
+}

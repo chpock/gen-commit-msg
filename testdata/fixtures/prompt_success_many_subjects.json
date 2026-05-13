@@ -1,0 +1,19 @@
+{
+  "info": {
+    "id": "msg_many_001",
+    "sessionID": "mock_sess_001",
+    "role": "assistant",
+    "mode": "gen-commit-msg",
+    "modelID": "deepseek-v4-pro",
+    "providerID": "opencode-go",
+    "parentID": "parent_001",
+    "path": {"cwd": "/tmp/test-repo", "root": "/tmp/test-repo"},
+    "time": {"created": 1715616002, "completed": 1715616010},
+    "tokens": {"input": 300, "output": 200, "reasoning": 100,
+               "cache": {"read": 0, "write": 0}},
+    "cost": 0.03,
+    "system": [],
+    "structured": "{\"subjects\":[\"feat(tui): add spinner animation\",\"fix(config): validate subject count bounds\",\"refactor(server): simplify healthcheck\",\"docs(readme): add installation guide\",\"chore(deps): bump bubbletea to v1.3.10\"],\"body\":\"Various improvements and additions across the codebase.\"}"
+  },
+  "parts": []
+}

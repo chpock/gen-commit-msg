@@ -1,0 +1,8 @@
+{
+  "id": "mock_sess_001",
+  "directory": "/tmp/test-repo",
+  "projectID": "proj_mock",
+  "time": {"created": 1715616000, "updated": 1715616001},
+  "title": "gen-commit-msg",
+  "version": "1.0"
+}

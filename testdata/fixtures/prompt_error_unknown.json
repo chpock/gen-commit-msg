@@ -1,0 +1,24 @@
+{
+  "info": {
+    "id": "msg_unknown_err_001",
+    "sessionID": "mock_sess_001",
+    "role": "assistant",
+    "mode": "chat",
+    "modelID": "gpt-4",
+    "providerID": "openai",
+    "parentID": "parent_001",
+    "path": {"cwd": "/tmp/test-repo", "root": "/tmp/test-repo"},
+    "time": {"created": 1715616002, "completed": 1715616003},
+    "tokens": {"input": 0, "output": 0, "reasoning": 0,
+               "cache": {"read": 0, "write": 0}},
+    "cost": 0,
+    "system": [],
+    "error": {
+      "name": "UnknownError",
+      "data": {
+        "message": "something went wrong"
+      }
+    }
+  },
+  "parts": []
+}

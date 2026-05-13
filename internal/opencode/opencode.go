@@ -26,22 +26,48 @@ type CommitMessage struct {
 	Body    string `json:"body"`
 }
 
+type sessionClient interface {
+	New(ctx context.Context, params opencode.SessionNewParams) (*opencode.Session, error)
+	Prompt(ctx context.Context, sessionID string, params opencode.SessionPromptParams, opts ...option.RequestOption) (*opencode.SessionPromptResponse, error)
+	Delete(ctx context.Context, sessionID string, params opencode.SessionDeleteParams, opts ...option.RequestOption) (*bool, error)
+}
+
+type realSessionClient struct {
+	session *opencode.SessionService
+}
+
+func (r *realSessionClient) New(ctx context.Context, params opencode.SessionNewParams) (*opencode.Session, error) {
+	return r.session.New(ctx, params)
+}
+
+func (r *realSessionClient) Prompt(ctx context.Context, sessionID string, params opencode.SessionPromptParams, opts ...option.RequestOption) (*opencode.SessionPromptResponse, error) {
+	return r.session.Prompt(ctx, sessionID, params, opts...)
+}
+
+func (r *realSessionClient) Delete(ctx context.Context, sessionID string, params opencode.SessionDeleteParams, opts ...option.RequestOption) (*bool, error) {
+	return r.session.Delete(ctx, sessionID, params, opts...)
+}
+
 type Client struct {
-	sdkClient *opencode.Client
-	baseURL   string
-	repoDir   string
-	agent     string
+	session sessionClient
+	baseURL string
+	repoDir string
+	agent   string
 }
 
 func NewClient(baseURL, repoDir, agent string) *Client {
 	httpClient := &http.Client{Timeout: 120 * time.Second}
 	oc := opencode.NewClient(option.WithBaseURL(baseURL), option.WithHTTPClient(httpClient))
-	return &Client{sdkClient: oc, baseURL: baseURL, repoDir: repoDir, agent: agent}
+	return &Client{session: &realSessionClient{session: oc.Session}, baseURL: baseURL, repoDir: repoDir, agent: agent}
+}
+
+func newClientWithSession(s sessionClient, repoDir, agent string) *Client {
+	return &Client{session: s, repoDir: repoDir, agent: agent}
 }
 
 func (c *Client) CreateSession(ctx context.Context, agentName string) (string, error) {
 	slog.Debug("creating session", "agent", agentName, "dir", c.repoDir)
-	session, err := c.sdkClient.Session.New(ctx, opencode.SessionNewParams{
+	session, err := c.session.New(ctx, opencode.SessionNewParams{
 		Directory: opencode.F(c.repoDir),
 		Title:     opencode.String(agentName),
 	})
@@ -92,7 +118,7 @@ func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params 
 		"retryCount": 2,
 	}
 
-	res, err := c.sdkClient.Session.Prompt(
+	res, err := c.session.Prompt(
 		ctx,
 		sessionID,
 		opencode.SessionPromptParams{
@@ -177,7 +203,7 @@ func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params 
 
 func (c *Client) DeleteSession(ctx context.Context, sessionID string) error {
 	slog.Debug("deleting session", "session_id", sessionID)
-	_, err := c.sdkClient.Session.Delete(ctx, sessionID, opencode.SessionDeleteParams{})
+	_, err := c.session.Delete(ctx, sessionID, opencode.SessionDeleteParams{})
 	if err != nil {
 		slog.Warn("failed to delete session", "session_id", sessionID, "error", err)
 	}

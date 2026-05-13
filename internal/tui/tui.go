@@ -10,6 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/chpock/gen-commit-msg/internal/color"
 )
 
 type state int
@@ -326,8 +328,29 @@ func (m Model) View() string {
 	case stateError:
 		var b strings.Builder
 		m.renderSteps(&b)
-		b.WriteString("\n\n  Error: ")
-		b.WriteString(m.err.Error())
+
+		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
+		detailStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+
+		b.WriteString("\n\n  ")
+		b.WriteString(errStyle.Render("Error:"))
+		b.WriteString(" ")
+
+		errText := m.err.Error()
+		if idx := strings.Index(errText, "\n"); idx >= 0 {
+			firstLine := errText[:idx]
+			rest := errText[idx+1:]
+			b.WriteString(detailStyle.Render(firstLine))
+			b.WriteString("\n")
+			if strings.HasPrefix(strings.TrimSpace(rest), "{") || strings.HasPrefix(strings.TrimSpace(rest), "[") {
+				b.WriteString(color.Indent(color.ColorizeJSON(rest), 4))
+			} else {
+				b.WriteString(color.Indent(rest, 4))
+			}
+		} else {
+			b.WriteString(detailStyle.Render(errText))
+		}
+
 		b.WriteString("\n\n  Press any key to exit.\n")
 		return b.String()
 	}

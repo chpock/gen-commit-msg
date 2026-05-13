@@ -15,6 +15,7 @@ import (
 	"github.com/mattn/go-isatty"
 
 	"github.com/chpock/gen-commit-msg/internal/agent"
+	col "github.com/chpock/gen-commit-msg/internal/color"
 	"github.com/chpock/gen-commit-msg/internal/config"
 	"github.com/chpock/gen-commit-msg/internal/git"
 	"github.com/chpock/gen-commit-msg/internal/logging"
@@ -28,12 +29,12 @@ var version = "dev"
 func main() {
 	cfg, err := config.ParseFlags()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmtError("Error: %v\n", err)
 		os.Exit(2)
 	}
 
 	if err := logging.SetupFromConfig(cfg.LogLevel, cfg.LogFile); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to configure logging: %v\n", err)
+		fmtError("Error: failed to configure logging: %v\n", err)
 		os.Exit(2)
 	}
 
@@ -69,14 +70,14 @@ func main() {
 
 	if !git.IsRepo() {
 		slog.Error("not a git repository")
-		fmt.Fprintln(os.Stderr, "Error: not a git repository")
+		fmtError("Error: not a git repository\n")
 		pauseExit(1, true)
 	}
 
 	hasStaged, err := git.HasStagedFiles()
 	if err != nil {
 		slog.Error("failed to check staged files", "error", err)
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmtError("Error: %v\n", err)
 		pauseExit(1, true)
 	}
 	if !hasStaged {
@@ -87,14 +88,14 @@ func main() {
 	repoDir, err := os.Getwd()
 	if err != nil {
 		slog.Error("failed to get current directory", "error", err)
-		fmt.Fprintln(os.Stderr, "Error: failed to get current directory: "+err.Error())
+		fmtError("Error: failed to get current directory: %s\n", err.Error())
 		pauseExit(1, true)
 	}
 	slog.Debug("repository directory", "dir", repoDir)
 	if !isTTY && cfg.SubjectCount > 1 {
 		slog.Error("non-TTY with subject count > 1",
 			"subject_count", cfg.SubjectCount, "is_tty", isTTY)
-		fmt.Fprintln(os.Stderr, "Error: --subject-count > 1 requires an interactive terminal. Use --subject-count 1 for non-interactive mode.")
+		fmtError("Error: --subject-count > 1 requires an interactive terminal. Use --subject-count 1 for non-interactive mode.\n")
 		pauseExit(1, true)
 	}
 
@@ -255,7 +256,7 @@ func main() {
 		finalModel, err := p.Run()
 		if err != nil {
 			slog.Error("TUI initialization failed", "error", err)
-			fmt.Fprintf(os.Stderr, "Error: TUI initialization failed: %v\n", err)
+			fmtError("Error: TUI initialization failed: %v\n", err)
 			closeTTY()
 			pauseExit(1, true)
 		}
@@ -275,7 +276,7 @@ func main() {
 	// Ensure agent prompt file exists.
 	if err := agent.Ensure(cfg.Agent, cfg.InstallAgent); err != nil {
 		slog.Error("failed to ensure agent", "error", err)
-		fmt.Fprintln(os.Stderr, "Error: failed to ensure agent: "+err.Error())
+		fmtError("Error: failed to ensure agent: %s\n", err.Error())
 		pauseExit(1, true)
 	}
 
@@ -346,20 +347,69 @@ func formatMessageFromOC(msg opencode.CommitMessage) string {
 }
 
 func printServerError(err error) {
+	isTTY := isatty.IsTerminal(os.Stderr.Fd())
+	var msg string
 	switch {
 	case errors.Is(err, server.ErrOpenCodeNotFound):
-		fmt.Fprintln(os.Stderr, "Error: opencode not found. Is it installed?")
+		msg = "Error: opencode not found. Is it installed?"
 	case errors.Is(err, server.ErrServerTimeout):
-		fmt.Fprintln(os.Stderr, "Error: opencode server failed to start (no response after 30s)")
+		msg = "Error: opencode server failed to start (no response after 30s)"
 	case errors.Is(err, server.ErrServerExited):
-		fmt.Fprintln(os.Stderr, "Error: opencode server exited unexpectedly")
+		msg = "Error: opencode server exited unexpectedly"
 	default:
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		msg = fmt.Sprintf("Error: %v", err)
 	}
+	if isTTY {
+		msg = col.RedText(msg)
+	}
+	fmt.Fprintln(os.Stderr, msg)
+}
+
+func fmtError(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	if isatty.IsTerminal(os.Stderr.Fd()) {
+		msg = col.RedText(msg)
+	}
+	fmt.Fprint(os.Stderr, msg)
 }
 
 func formatOpenCodeError(err error) string {
-	return fmt.Sprintf("Error: failed to generate commit message: %v", err)
+	msg := fmt.Sprintf("Error: failed to generate commit message: %v", err)
+	if !isatty.IsTerminal(os.Stderr.Fd()) {
+		return msg
+	}
+	return formatErrorColorized(msg)
+}
+
+func formatErrorColorized(msg string) string {
+	idx := strings.Index(msg, ": ")
+	if idx < 0 {
+		return col.Red + msg + col.Reset
+	}
+
+	label := msg[:idx+2]
+	rest := msg[idx+2:]
+
+	var b strings.Builder
+	b.WriteString(col.Red)
+	b.WriteString(label)
+	b.WriteString(col.Reset)
+
+	// If rest contains JSON, colorize it.
+	if jsonStart := strings.Index(rest, "\n{") + 1; jsonStart > 0 {
+		prefix := rest[:jsonStart]
+		jsonPart := rest[jsonStart:]
+		b.WriteString(prefix)
+		b.WriteString(col.ColorizeJSON(jsonPart))
+	} else if jsonStart := strings.Index(rest, "\n["); jsonStart >= 0 {
+		prefix := rest[:jsonStart]
+		jsonPart := rest[jsonStart:]
+		b.WriteString(prefix)
+		b.WriteString(col.ColorizeJSON(jsonPart))
+	} else {
+		b.WriteString(rest)
+	}
+	return b.String()
 }
 
 func openTTY() (*os.File, func()) {

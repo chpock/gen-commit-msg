@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"time"
 
 	opencode "github.com/sst/opencode-sdk-go"
@@ -101,7 +102,7 @@ func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params 
 	)
 	if err != nil {
 		slog.Error("prompt failed", "session_id", sessionID, "error", err)
-		return nil, fmt.Errorf("send prompt: %w", err)
+		return nil, fmt.Errorf("send prompt: %w", wrapPromptError(err, sessionID, c.agent, prompt))
 	}
 
 	raw, err := getStructuredJSON(res)
@@ -137,6 +138,75 @@ func (c *Client) DeleteSession(ctx context.Context, sessionID string) error {
 	return err
 }
 
+type promptError struct {
+	StatusCode int
+	Method     string
+	URL        string
+	Body       string
+	SessionID  string
+	Agent      string
+	Prompt     string
+}
+
+func (e *promptError) Error() string {
+	var b []byte
+	b = fmt.Appendf(b, "HTTP %d %s %s", e.StatusCode, e.Method, e.URL)
+	b = fmt.Appendf(b, "\n  Session: %s", e.SessionID)
+	b = fmt.Appendf(b, "\n  Agent:   %s", e.Agent)
+	b = fmt.Appendf(b, "\n  Prompt:  %s", e.Prompt)
+	return string(b)
+}
+
+func wrapPromptError(err error, sessionID, agent, prompt string) error {
+	code, method, url, body := extractHTTPError(err)
+	if code != 0 {
+		return &promptError{
+			StatusCode: code,
+			Method:     method,
+			URL:        url,
+			Body:       body,
+			SessionID:  sessionID,
+			Agent:      agent,
+			Prompt:     prompt,
+		}
+	}
+	return err
+}
+
+func extractHTTPError(err error) (code int, method, url, body string) {
+	v := reflect.Indirect(reflect.ValueOf(err))
+	if v.Kind() != reflect.Struct {
+		return
+	}
+
+	if f := v.FieldByName("StatusCode"); f.IsValid() {
+		switch f.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			code = int(f.Int())
+		}
+	}
+
+	if f := v.FieldByName("Request"); f.IsValid() && f.Kind() == reflect.Ptr && !f.IsNil() {
+		req := f.Elem()
+		if m := req.FieldByName("Method"); m.IsValid() && m.Kind() == reflect.String {
+			method = m.String()
+		}
+		if u := req.FieldByName("URL"); u.IsValid() && !u.IsNil() {
+			if s := u.MethodByName("String"); s.IsValid() {
+				url = s.Call(nil)[0].String()
+			}
+		}
+	}
+
+	if f := v.FieldByName("JSON"); f.IsValid() {
+		if raw := f.MethodByName("RawJSON"); raw.IsValid() {
+			body = raw.Call(nil)[0].String()
+		}
+	}
+
+	return
+}
+
 func getStructuredJSON(res *opencode.SessionPromptResponse) ([]byte, error) {
 	if res == nil {
 		return nil, errors.New("nil opencode response")
@@ -163,6 +233,15 @@ func getStructuredJSON(res *opencode.SessionPromptResponse) ([]byte, error) {
 		return []byte(raw), nil
 	}
 
-	slog.Debug("structured output not found in response", "raw", res.Info.JSON.RawJSON())
-	return nil, errors.New("structured output was not found in response")
+	rawJSON := res.Info.JSON.RawJSON()
+	slog.Debug("structured output not found in response", "raw", rawJSON)
+	return nil, &responseError{RawJSON: rawJSON}
+}
+
+type responseError struct {
+	RawJSON string
+}
+
+func (e *responseError) Error() string {
+	return "structured output was not found in response:\n" + e.RawJSON
 }

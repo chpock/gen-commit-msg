@@ -2,6 +2,8 @@ package opencode
 
 import (
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
 	opencode "github.com/sst/opencode-sdk-go"
@@ -129,6 +131,9 @@ func TestGetStructuredJSON_missing(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing structured output")
 	}
+	if !strings.Contains(err.Error(), "msg_3") {
+		t.Errorf("error should contain raw response data (session ID), got: %v", err)
+	}
 }
 
 func TestGetStructuredJSON_empty(t *testing.T) {
@@ -159,6 +164,9 @@ func TestGetStructuredJSON_empty(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for empty structured output")
 	}
+	if !strings.Contains(err.Error(), "msg_4") {
+		t.Errorf("error should contain raw response data (session ID), got: %v", err)
+	}
 }
 
 func TestGetStructuredJSON_null(t *testing.T) {
@@ -188,5 +196,48 @@ func TestGetStructuredJSON_null(t *testing.T) {
 	_, err := getStructuredJSON(&res)
 	if err == nil {
 		t.Fatal("expected error for null structured output")
+	}
+	if !strings.Contains(err.Error(), "msg_5") {
+		t.Errorf("error should contain raw response data (session ID), got: %v", err)
+	}
+}
+
+func TestPromptError_format(t *testing.T) {
+	err := &promptError{
+		StatusCode: 500,
+		Method:     "POST",
+		URL:        "http://127.0.0.1:4096/session/sess_1/message",
+		Body:       `{"error":"internal server error"}`,
+		SessionID:  "sess_1",
+		Agent:      "my-agent",
+		Prompt:     "generate commit messages",
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "500") {
+		t.Errorf("error should contain status code 500, got: %v", msg)
+	}
+	if !strings.Contains(msg, "POST") {
+		t.Errorf("error should contain method POST, got: %v", msg)
+	}
+	if !strings.Contains(msg, "sess_1") {
+		t.Errorf("error should contain session ID, got: %v", msg)
+	}
+	if !strings.Contains(msg, "my-agent") {
+		t.Errorf("error should contain agent name, got: %v", msg)
+	}
+}
+
+func TestResponseError_format(t *testing.T) {
+	err := &responseError{RawJSON: `{"info":{"sessionID":"sess_x"}}`}
+	if !strings.Contains(err.Error(), "sess_x") {
+		t.Errorf("error should contain raw JSON, got: %v", err)
+	}
+}
+
+func TestWrapPromptError_nonHTTP(t *testing.T) {
+	plain := errors.New("connection refused")
+	wrapped := wrapPromptError(plain, "s1", "agent", "prompt")
+	if wrapped != plain {
+		t.Error("non-HTTP error should pass through unchanged")
 	}
 }

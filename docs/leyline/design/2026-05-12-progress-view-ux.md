@@ -41,7 +41,7 @@ Design-interrogation pass complete - round 1 - 2026-05-12
 4. Steps that depend on the failed step are marked as skipped (`-`), sent explicitly by the goroutine
 5. Cleanup steps (delete session, stop server) run if their prerequisites exist and show their real outcome (✓ / ⚠ / ✗)
 6. When all steps report their final status (`allStepsDoneMsg`), the TUI transitions to error view showing the first failure
-7. Dismiss with q, Esc, Enter or Ctrl+C → program exits with error code 1
+7. Dismiss with Enter or Ctrl+C → program exits with error code 1
 
 ### Flow 2b — Cleanup warning (step 4 or 5 failure after successful generation)
 1. Steps 1-3 complete successfully (✓)
@@ -57,13 +57,13 @@ Design-interrogation pass complete - round 1 - 2026-05-12
 3. Error detail appears as stepDetail below the step list
 4. Cleanup steps 4-5 run and show their real outcome (✓ / ⚠ / ✗) — delete session and stop server
 5. When all steps report their final status (`allStepsDoneMsg`), the TUI transitions to error view showing the generation failure
-6. Dismiss with q, Esc, Enter or Ctrl+C → program exits with error code 1
+6. Dismiss with Enter or Ctrl+C → program exits with error code 1
 
 ## State matrix
 
 | Surface | Loading | Error | Success | Empty |
 |---------|---------|-------|---------|-------|
-| Progress view | All 5 steps shown; current step shows spinner; completed steps show ✓; pending steps dimmed | Failed step ✗ + error detail below list; dependent steps show `-` (skipped); cleanup steps show their real outcome (✓ / ⚠ / ✗); after `allStepsDoneMsg` transitions to error view; dismiss with q/Esc/Enter/Ctrl+C | All steps ✓; auto-transition to message selection after 300ms; cleanup warnings (⚠) show inline but still auto-transition | Steps all ✓; inline error "no commit messages generated" below list; same dismiss behavior |
+| Progress view | All 5 steps shown; current step shows spinner; completed steps show ✓; pending steps dimmed | Failed step ✗ + error detail below list; dependent steps show `-` (skipped); cleanup steps show their real outcome (✓ / ⚠ / ✗); after `allStepsDoneMsg` transitions to error view; dismiss with Enter/Ctrl+C | All steps ✓; auto-transition to message selection after 300ms; cleanup warnings (⚠) show inline but still auto-transition | Steps all ✓; inline error "no commit messages generated" below list; same dismiss behavior |
 | Message selection | N/A — preceded by progress view | N/A — all errors handled inline on progress view | List of messages; ↑↓ to navigate; Enter to select; selected message printed to stdout | N/A — zero messages handled on progress view |
 
 Permission-denied, Offline: N/A — local CLI tool, no network auth required.
@@ -83,7 +83,7 @@ Voice is direct, technical, English-only. No emoji, no exclamation marks, no per
 
 ## Accessibility targets
 - **WCAG level**: N/A (terminal TUI — text-based by nature; color independence is the primary concern)
-- **Keyboard flow**: Ctrl+C / Esc exits at any point. ↑↓ to navigate message list. Enter to select. Error states: dismiss with q, Esc, Enter, or Ctrl+C after 1s debounce (prevents accidental dismissal from buffered input).
+- **Keyboard flow**: Ctrl+C / Esc exits at any point. ↑↓ to navigate message list. Enter to select. Error states: dismiss with Enter or Ctrl+C.
 - **Screen reader**: Step labels are plain text; status indicators (✓ / ✗) are Unicode characters readable by most screen readers. Unicode fallback: `[OK]` / `[FAIL]`. Limitation: status indicators update in-place on existing lines; terminal screen readers that poll may not re-read single-character prefix changes. A future `--a11y` mode could append status lines instead of replacing them.
 - **Motion**: Single spinner character updates — already minimal motion. Running step uses SGR 1 (bold); pending/done use SGR 2 (faint). On terminals without SGR support, structural prefixes degrade gracefully: `>` for running, `  ` for pending, `✓`/`[OK]` for done.
 - **Color independence**: Status is conveyed by characters (✓, ✗, ⚠) and SGR styles, not color alone.

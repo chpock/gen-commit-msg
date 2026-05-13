@@ -111,7 +111,7 @@ Each step communicates its real execution status to the TUI. The goroutine in ma
 2. Execution continues for all steps whose prerequisites are satisfied
 3. Cleanup steps execute and show their real status
 4. When `allStepsDoneMsg` arrives, the TUI transitions to the error view showing the first failure detail
-5. User dismisses with q, Esc, Enter or Ctrl+C
+5. User dismisses with Enter or Ctrl+C
 
 **Cleanup warning (step 3/4 failure after successful generation)**:
 If step 2 succeeds but step 3 or 4 fails: show ⚠ (warning) on the failed step with a "Cleanup issue: <detail>" message. Auto-transition to message selection view — generated messages are still accessible.
@@ -140,14 +140,14 @@ Failure example (step 1 fails, step 4 cleanup succeeds):
   Step 3: - Deleting session...             ← skipped (no session)
   Step 4: ✓ Stopping OpenCode server...     ← ran, real result shown
        Error: failed to create session: connection refused
-       Press any key to exit.
+       Press Enter to exit.
 ```
 
 ## Success criteria
 - Running `gen-commit-msg` in interactive mode shows the progress view with all 5 steps
 - Each step transitions from pending → running (spinner) → done (checkmark) in order
 - After step 5 completes, the TUI waits 300ms then auto-advances to message selection
-- If any step fails, a failure indicator (✗) + per-step error message is shown; pressing any key exits
+- If any step fails, a failure indicator (✗) + per-step error message is shown; pressing Enter exits
 - Cleanup (session delete, server stop) runs outside the TUI after `p.Run()` returns
 - If the terminal does not support Unicode, checkmarks/crosses fall back to `[OK]`/`[FAIL]`
 - Non-TTY mode prints no progress output (unchanged behavior)

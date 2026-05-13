@@ -22,9 +22,7 @@ type Config struct {
 	Help         bool
 }
 
-func ParseFlags() (*Config, error) {
-	cfg := &Config{}
-
+func initFlags() *flag.FlagSet {
 	flags := flag.NewFlagSet("gen-commit-msg", flag.ContinueOnError)
 	flags.UintP("subject-count", "n", 5, "number of subject variants")
 	flags.Bool("body", true, "generate message body")
@@ -36,6 +34,13 @@ func ParseFlags() (*Config, error) {
 	flags.String("install-agent", "if-not-exists", "agent install behavior: always, if-not-exists, no")
 	flags.BoolP("version", "V", false, "print version and exit")
 	flags.BoolP("help", "h", false, "print help and exit")
+	return flags
+}
+
+func ParseFlags() (*Config, error) {
+	cfg := &Config{}
+
+	flags := initFlags()
 
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		slog.Error("failed to parse flags", "error", err)
@@ -96,18 +101,8 @@ func getBoolFlagOrEnv(flags *flag.FlagSet, name, envVar string, defaultVal bool)
 }
 
 func Usage() {
-	flags := flag.NewFlagSet("gen-commit-msg", flag.ContinueOnError)
+	flags := initFlags()
 	flags.SetOutput(os.Stdout)
-	flags.UintP("subject-count", "n", 5, "number of subject variants")
-	flags.Bool("body", true, "generate message body")
-	flags.BoolP("quiet", "q", false, "suppress progress output")
-	flags.StringP("agent", "a", "gen-commit-msg", "opencode agent name")
-	flags.StringP("log-level", "l", "none", "log verbosity: none, debug, info, warn, error")
-	flags.String("log-file", "", "log output file (default: stderr)")
-	flags.String("pause", "on-error", "pause before exit: on, off, on-error")
-	flags.String("install-agent", "if-not-exists", "agent install behavior: always, if-not-exists, no")
-	flags.BoolP("version", "V", false, "print version and exit")
-	flags.BoolP("help", "h", false, "print help and exit")
 	flags.Usage = func() {
 		_, _ = fmt.Fprintf(flags.Output(), "Usage of %s:\n", flags.Name())
 		flags.PrintDefaults()

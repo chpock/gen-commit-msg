@@ -264,6 +264,12 @@ func main() {
 		m = finalModel.(tui.Model)
 		if m.Error() != nil {
 			slog.Error("TUI ended with error", "error", m.Error())
+			closeTTY()
+			fmt.Fprint(os.Stderr, m.RenderError())
+			if isTTY {
+				readAnyKeyFromTTY()
+			}
+			fmt.Fprintln(os.Stderr)
 			os.Exit(1)
 		}
 		selected := m.SelectedMessage()
@@ -455,4 +461,14 @@ func pauseWithEnter(isTTY bool, message string) {
 		}
 	}
 	fmt.Fprintln(os.Stderr)
+}
+
+func readAnyKeyFromTTY() {
+	tty, err := os.OpenFile("/dev/tty", os.O_RDONLY, 0)
+	if err != nil {
+		return
+	}
+	defer func() { _ = tty.Close() }()
+	var buf [1]byte
+	_, _ = tty.Read(buf[:])
 }

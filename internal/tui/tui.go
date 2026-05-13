@@ -177,7 +177,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			slog.Error("generation failed", "error", msg.err)
 			m.err = msg.err
 			m.state = stateError
-			return m, nil
+			m.quitting = true
+			return m, tea.Quit
 		}
 		slog.Debug("received messages", "count", len(msg.messages))
 		m.messages = msg.messages
@@ -186,7 +187,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			slog.Warn("no commit messages generated")
 			m.err = fmt.Errorf("no commit messages generated")
 			m.state = stateError
-			return m, nil
+			m.quitting = true
+			return m, tea.Quit
 		case 1:
 			m.selected = formatMessage(m.messages[0])
 			return m, tea.Quit
@@ -224,6 +226,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state == stateProgress {
 			if m.err != nil {
 				m.state = stateError
+				m.quitting = true
+				return m, tea.Quit
 			} else {
 				m.state = stateResult
 			}
@@ -250,11 +254,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, cmd
-	case stateError:
-		if _, ok := msg.(tea.KeyMsg); ok {
-			m.quitting = true
-			return m, tea.Quit
-		}
 	}
 	return m, nil
 }
@@ -326,33 +325,7 @@ func (m Model) View() string {
 	case stateResult:
 		return m.list.View()
 	case stateError:
-		var b strings.Builder
-		m.renderSteps(&b)
-
-		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
-		detailStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-
-		b.WriteString("\n\n  ")
-		b.WriteString(errStyle.Render("Error:"))
-		b.WriteString(" ")
-
-		errText := m.err.Error()
-		if idx := strings.Index(errText, "\n"); idx >= 0 {
-			firstLine := errText[:idx]
-			rest := errText[idx+1:]
-			b.WriteString(detailStyle.Render(firstLine))
-			b.WriteString("\n")
-			if strings.HasPrefix(strings.TrimSpace(rest), "{") || strings.HasPrefix(strings.TrimSpace(rest), "[") {
-				b.WriteString(color.Indent(color.ColorizeJSON(rest), 4))
-			} else {
-				b.WriteString(color.Indent(rest, 4))
-			}
-		} else {
-			b.WriteString(detailStyle.Render(errText))
-		}
-
-		b.WriteString("\n\n  Press any key to exit.\n")
-		return b.String()
+		return ""
 	}
 	return ""
 }
@@ -363,6 +336,36 @@ func (m Model) SelectedMessage() string {
 
 func (m Model) Error() error {
 	return m.err
+}
+
+func (m Model) RenderError() string {
+	var b strings.Builder
+	m.renderSteps(&b)
+
+	errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
+	detailStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+
+	b.WriteString("\n\n")
+	b.WriteString(errStyle.Render("Error:"))
+	b.WriteString(" ")
+
+	errText := m.err.Error()
+	if idx := strings.Index(errText, "\n"); idx >= 0 {
+		firstLine := errText[:idx]
+		rest := errText[idx+1:]
+		b.WriteString(detailStyle.Render(firstLine))
+		b.WriteString("\n")
+		if strings.HasPrefix(strings.TrimSpace(rest), "{") || strings.HasPrefix(strings.TrimSpace(rest), "[") {
+			b.WriteString(color.Indent(color.ColorizeJSON(rest), 4))
+		} else {
+			b.WriteString(color.Indent(rest, 4))
+		}
+	} else {
+		b.WriteString(detailStyle.Render(errText))
+	}
+
+	b.WriteString("\n\nPress any key to exit.")
+	return b.String()
 }
 
 func (m Model) ShouldQuit() bool {

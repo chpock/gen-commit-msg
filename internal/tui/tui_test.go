@@ -175,7 +175,7 @@ func TestErrorView(t *testing.T) {
 	m := NewModel(5, false)
 	m.state = stateError
 	m.err = fmt.Errorf("test error")
-	v := m.View()
+	v := m.RenderError()
 	if !contains(v, "Error: test error") {
 		t.Errorf("error view missing error text: %q", v)
 	}
@@ -519,7 +519,7 @@ func TestErrorViewShowsSteps(t *testing.T) {
 	m.steps[2].status = StepFailed
 	m.steps[3].status = StepSkipped
 	m.steps[4].status = StepSkipped
-	v := m.View()
+	v := m.RenderError()
 	for _, label := range labels {
 		if !contains(v, label) {
 			t.Errorf("error view missing step label: %q", label)

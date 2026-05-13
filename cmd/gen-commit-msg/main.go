@@ -13,6 +13,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-isatty"
+	"golang.org/x/term"
 
 	"github.com/chpock/gen-commit-msg/internal/agent"
 	col "github.com/chpock/gen-commit-msg/internal/color"
@@ -155,7 +156,7 @@ func main() {
 			step0OK := true
 			if err := agent.Ensure(cfg.Agent, cfg.InstallAgent); err != nil {
 				slog.Error("failed to ensure agent", "error", err)
-				p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "Agent setup failed: " + err.Error()})
+				p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "Agent setup failed", Err: &opencode.AppError{Op: "agent_setup", Message: err.Error(), Err: err}})
 				step0OK = false
 			}
 			if step0OK {
@@ -164,7 +165,7 @@ func main() {
 				baseURL, startErr = srv.Start(ctx)
 				if startErr != nil {
 					slog.Error("failed to start server", "error", startErr)
-					p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "OpenCode server failed to start: " + startErr.Error()})
+					p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "OpenCode server failed to start", Err: &opencode.AppError{Op: "server_start", Message: startErr.Error(), Err: startErr}})
 					step0OK = false
 				} else {
 					slog.Info("opencode server started", "url", baseURL)
@@ -182,7 +183,11 @@ func main() {
 				sessionID, createErr = oc.CreateSession(ctx, cfg.Agent)
 				if createErr != nil {
 					slog.Error("failed to create session", "agent", cfg.Agent, "error", createErr)
-					p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepFailed, Detail: "Failed to create session: " + createErr.Error()})
+					var createAppErr *opencode.AppError
+					if !errors.As(createErr, &createAppErr) {
+						createAppErr = &opencode.AppError{Op: "create_session", Message: createErr.Error(), Err: createErr}
+					}
+					p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepFailed, Detail: "Failed to create session", Err: createAppErr})
 				} else {
 					slog.Info("session created", "id", sessionID, "agent", cfg.Agent)
 					p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepDone})
@@ -203,7 +208,11 @@ func main() {
 				messages, genErr = oc.GenerateMessages(ctx, sessionID, genParams)
 				if genErr != nil {
 					slog.Error("failed to generate messages", "error", genErr)
-					p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepFailed, Detail: "Failed to generate commit messages: " + genErr.Error()})
+					var genAppErr *opencode.AppError
+					if !errors.As(genErr, &genAppErr) {
+						genAppErr = &opencode.AppError{Op: "generate_messages", Message: genErr.Error(), Err: genErr}
+					}
+					p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepFailed, Detail: "Failed to generate commit messages", Err: genAppErr})
 				} else {
 					slog.Info("messages generated", "count", len(messages))
 					p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepDone})
@@ -269,7 +278,7 @@ func main() {
 			closeTTY()
 			fmt.Fprint(os.Stderr, m.RenderError())
 			if isTTY {
-				readAnyKeyFromTTY()
+				pauseWithEnter(isTTY, "")
 			}
 			fmt.Fprintln(os.Stderr)
 			os.Exit(1)
@@ -382,42 +391,20 @@ func fmtError(format string, args ...any) {
 }
 
 func formatOpenCodeError(err error) string {
-	msg := fmt.Sprintf("Error: failed to generate commit message: %v", err)
-	if !isatty.IsTerminal(os.Stderr.Fd()) {
-		return msg
-	}
-	return formatErrorColorized(msg)
-}
+	isTTY := isatty.IsTerminal(os.Stderr.Fd())
 
-func formatErrorColorized(msg string) string {
-	idx := strings.Index(msg, ": ")
-	if idx < 0 {
-		return col.Red + msg + col.Reset
+	var appErr *opencode.AppError
+	if errors.As(err, &appErr) {
+		if isTTY {
+			return appErr.Render()
+		}
+		return "Error: " + appErr.Error()
 	}
 
-	label := msg[:idx+2]
-	rest := msg[idx+2:]
-
-	var b strings.Builder
-	b.WriteString(col.Red)
-	b.WriteString(label)
-	b.WriteString(col.Reset)
-
-	// If rest contains JSON, colorize it.
-	if jsonStart := strings.Index(rest, "\n{") + 1; jsonStart > 0 {
-		prefix := rest[:jsonStart]
-		jsonPart := rest[jsonStart:]
-		b.WriteString(prefix)
-		b.WriteString(col.ColorizeJSON(jsonPart))
-	} else if jsonStart := strings.Index(rest, "\n["); jsonStart >= 0 {
-		prefix := rest[:jsonStart]
-		jsonPart := rest[jsonStart:]
-		b.WriteString(prefix)
-		b.WriteString(col.ColorizeJSON(jsonPart))
-	} else {
-		b.WriteString(rest)
+	if isTTY {
+		return col.Red + "Error: " + col.Reset + err.Error()
 	}
-	return b.String()
+	return "Error: " + err.Error()
 }
 
 func openTTY() (*os.File, func()) {
@@ -444,33 +431,33 @@ func truncateString(s string, maxLen int) string {
 
 func pauseWithEnter(isTTY bool, message string) {
 	slog.Debug("pausing before exit", "message", message)
-	fmt.Fprintf(os.Stderr, "\n%s", message)
-	if isTTY {
-		tty, err := os.OpenFile("/dev/tty", os.O_RDONLY, 0)
-		if err != nil {
-			return
-		}
-		defer func() { _ = tty.Close() }()
-		var buf [1]byte
-		for {
-			n, _ := tty.Read(buf[:])
-			if n == 0 {
-				break
-			}
-			if buf[0] == '\n' {
-				break
-			}
-		}
+	if message != "" {
+		fmt.Fprintf(os.Stderr, "\n%s", message)
 	}
-	fmt.Fprintln(os.Stderr)
-}
-
-func readAnyKeyFromTTY() {
-	tty, err := os.OpenFile("/dev/tty", os.O_RDONLY, 0)
+	if !isTTY {
+		return
+	}
+	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
 		return
 	}
 	defer func() { _ = tty.Close() }()
+
+	fd := int(tty.Fd())
+	oldState, err := term.MakeRaw(fd)
+	if err != nil {
+		return
+	}
+	defer func() { _ = term.Restore(fd, oldState) }()
+
 	var buf [1]byte
-	_, _ = tty.Read(buf[:])
+	for {
+		n, _ := tty.Read(buf[:])
+		if n == 0 {
+			break
+		}
+		if buf[0] == '\r' || buf[0] == '\n' || buf[0] == 3 { // 3 = Ctrl+C
+			break
+		}
+	}
 }

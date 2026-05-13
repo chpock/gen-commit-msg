@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/chpock/gen-commit-msg/internal/color"
+	"github.com/chpock/gen-commit-msg/internal/opencode"
 )
 
 type state int
@@ -43,6 +44,7 @@ type StepUpdateMsg struct {
 	Index  int
 	Status StepStatus
 	Detail string
+	Err    *opencode.AppError
 }
 
 func stepLabels() [5]string {
@@ -72,6 +74,7 @@ type Model struct {
 	selected     string
 	quitting     bool
 	err          error
+	appErr       *opencode.AppError
 	subjectCount int
 	quiet        bool
 	width        int
@@ -215,6 +218,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if msg.Status == StepFailed {
 				m.err = fmt.Errorf("%s", msg.Detail)
+				if msg.Err != nil {
+					m.appErr = msg.Err
+				}
 				slog.Debug("step failure", "index", msg.Index, "detail", msg.Detail)
 			}
 			if msg.Status == StepWarning {
@@ -342,29 +348,44 @@ func (m Model) RenderError() string {
 	var b strings.Builder
 	m.renderSteps(&b)
 
-	errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
-	detailStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-
 	b.WriteString("\n\n")
-	b.WriteString(errStyle.Render("Error:"))
-	b.WriteString(" ")
 
-	errText := m.err.Error()
-	if idx := strings.Index(errText, "\n"); idx >= 0 {
-		firstLine := errText[:idx]
-		rest := errText[idx+1:]
-		b.WriteString(detailStyle.Render(firstLine))
-		b.WriteString("\n")
-		if strings.HasPrefix(strings.TrimSpace(rest), "{") || strings.HasPrefix(strings.TrimSpace(rest), "[") {
-			b.WriteString(color.Indent(color.ColorizeJSON(rest), 4))
-		} else {
-			b.WriteString(color.Indent(rest, 4))
-		}
+	if m.appErr != nil {
+		b.WriteString(m.appErr.Render())
 	} else {
-		b.WriteString(detailStyle.Render(errText))
+		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
+		detailStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+
+		b.WriteString(errStyle.Render("Error:"))
+		b.WriteString(" ")
+
+		errText := m.err.Error()
+		if idx := strings.Index(errText, "\n"); idx >= 0 {
+			firstLine := errText[:idx]
+			rest := errText[idx+1:]
+			b.WriteString(detailStyle.Render(firstLine))
+			b.WriteString("\n")
+			if jsonIdx := strings.LastIndex(rest, "\n{"); jsonIdx >= 0 {
+				detailBlock := rest[:jsonIdx+1]
+				jsonPart := rest[jsonIdx+1:]
+				b.WriteString(color.Indent(color.ColorizeKeyValueBlock(detailBlock), 4))
+				b.WriteString(color.Indent(color.ColorizeJSON(jsonPart), 4))
+			} else if jsonIdx := strings.LastIndex(rest, "\n["); jsonIdx >= 0 {
+				detailBlock := rest[:jsonIdx+1]
+				jsonPart := rest[jsonIdx+1:]
+				b.WriteString(color.Indent(color.ColorizeKeyValueBlock(detailBlock), 4))
+				b.WriteString(color.Indent(color.ColorizeJSON(jsonPart), 4))
+			} else if strings.HasPrefix(strings.TrimSpace(rest), "{") || strings.HasPrefix(strings.TrimSpace(rest), "[") {
+				b.WriteString(color.Indent(color.ColorizeJSON(rest), 4))
+			} else {
+				b.WriteString(color.Indent(rest, 4))
+			}
+		} else {
+			b.WriteString(detailStyle.Render(errText))
+		}
 	}
 
-	b.WriteString("\n\nPress any key to exit.")
+	b.WriteString("\nPress Enter to exit.")
 	return b.String()
 }
 

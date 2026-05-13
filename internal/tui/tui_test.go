@@ -179,7 +179,7 @@ func TestErrorView(t *testing.T) {
 	if !contains(v, "Error: test error") {
 		t.Errorf("error view missing error text: %q", v)
 	}
-	if !contains(v, "Press any key to exit") {
+	if !contains(v, "Press Enter to exit") {
 		t.Errorf("error view missing exit prompt: %q", v)
 	}
 }
@@ -528,7 +528,7 @@ func TestErrorViewShowsSteps(t *testing.T) {
 	if !contains(v, "Error: connection refused") {
 		t.Errorf("error view missing error text: %q", v)
 	}
-	if !contains(v, "Press any key to exit") {
+	if !contains(v, "Press Enter to exit") {
 		t.Errorf("error view missing exit prompt: %q", v)
 	}
 }

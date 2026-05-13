@@ -94,3 +94,53 @@ func TestIndent_single(t *testing.T) {
 		t.Errorf("expected 4-space indented line, got %q", out)
 	}
 }
+
+func TestColorizeKeyValueBlock_key_value(t *testing.T) {
+	input := "  Session:    ses_abc\n  Agent:      my-agent\n"
+	out := ColorizeKeyValueBlock(input)
+	if !strings.Contains(out, cyan) {
+		t.Error("output should contain cyan for keys")
+	}
+	if !strings.Contains(out, green) {
+		t.Error("output should contain green for values")
+	}
+	if !strings.Contains(out, gray) {
+		t.Error("output should contain gray for separator")
+	}
+	if !strings.Contains(out, "Session") {
+		t.Error("output should contain key text")
+	}
+	if !strings.Contains(out, "ses_abc") {
+		t.Error("output should contain value text")
+	}
+	if !strings.Contains(out, "my-agent") {
+		t.Error("output should contain second value text")
+	}
+}
+
+func TestColorizeKeyValueBlock_header_line(t *testing.T) {
+	input := "  Response:\n"
+	out := ColorizeKeyValueBlock(input)
+	if !strings.Contains(out, cyan) {
+		t.Error("header line key should be cyan")
+	}
+	if !strings.Contains(out, gray) {
+		t.Error("header line colon should be gray")
+	}
+	if !strings.Contains(out, "Response") {
+		t.Error("output should contain header line text")
+	}
+}
+
+func TestColorizeKeyValueBlock_mixed(t *testing.T) {
+	input := "  Error:      APIError\n  Message:    something\n  Response:\n"
+	out := ColorizeKeyValueBlock(input)
+	c1 := strings.Count(out, cyan)
+	if c1 < 3 {
+		t.Errorf("expected at least 3 cyan sections, got %d in: %q", c1, out)
+	}
+	c2 := strings.Count(out, green)
+	if c2 < 2 {
+		t.Errorf("expected at least 2 green sections, got %d in: %q", c2, out)
+	}
+}

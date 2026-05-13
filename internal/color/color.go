@@ -15,12 +15,18 @@ const (
 	yellow  = "\033[33m"
 	blue    = "\033[34m"
 	magenta = "\033[35m"
+	cyan    = "\033[36m"
 	gray    = "\033[90m"
 )
 
 var (
-	Red   = red
-	Reset = reset
+	Red    = red
+	Blue   = blue
+	Cyan   = cyan
+	Gray   = gray
+	Green  = green
+	Yellow = yellow
+	Reset  = reset
 )
 
 func RedText(s string) string { return red + s + reset }
@@ -157,6 +163,70 @@ func colorizeLiteral(b *strings.Builder, runes []rune, start int) int {
 
 func isIdentChar(ch rune) bool {
 	return unicode.IsLetter(ch) || unicode.IsDigit(ch) || ch == '_'
+}
+
+// ColorizeKeyValueBlock colorizes a block of key: value lines.
+// Keys are cyan, colons and spacing are gray, string values are green,
+// numeric values are yellow.
+func ColorizeKeyValueBlock(text string) string {
+	var b strings.Builder
+	b.Grow(len(text) + len(text)/4)
+
+	for _, line := range strings.SplitAfter(text, "\n") {
+		if line == "" {
+			continue
+		}
+		idx := strings.Index(line, ": ")
+		if idx < 0 {
+			// "Key:" without value (header line before JSON)
+			idx = strings.Index(line, ":")
+			if idx >= 0 {
+				b.WriteString(cyan)
+				b.WriteString(line[:idx])
+				b.WriteString(reset)
+				b.WriteString(gray)
+				b.WriteString(":")
+				b.WriteString(reset)
+				b.WriteString(line[idx+1:])
+			} else {
+				b.WriteString(line)
+			}
+			continue
+		}
+		keyWithIndent := line[:idx]
+		colonSpace := ": "
+		value := line[idx+2:]
+
+		b.WriteString(cyan)
+		b.WriteString(keyWithIndent)
+		b.WriteString(reset)
+		b.WriteString(gray)
+		b.WriteString(colonSpace)
+		b.WriteString(reset)
+
+		trimmed := strings.TrimSpace(value)
+		if isNumeric(trimmed) {
+			b.WriteString(yellow)
+		} else {
+			b.WriteString(green)
+		}
+		// Value may include trailing newline (from SplitAfter)
+		b.WriteString(value)
+		b.WriteString(reset)
+	}
+	return b.String()
+}
+
+func isNumeric(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, ch := range s {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // Indent wraps a string with indentation prefix on each line.

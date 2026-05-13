@@ -8,10 +8,12 @@ import (
 	"log/slog"
 	"net/http"
 	"reflect"
+	"strconv"
 	"time"
 
 	opencode "github.com/sst/opencode-sdk-go"
 	"github.com/sst/opencode-sdk-go/option"
+	"github.com/sst/opencode-sdk-go/shared"
 )
 
 type GenerateParams struct {
@@ -45,7 +47,12 @@ func (c *Client) CreateSession(ctx context.Context, agentName string) (string, e
 	})
 	if err != nil {
 		slog.Error("failed to create session", "agent", agentName, "error", err)
-		return "", fmt.Errorf("create session: %w", err)
+		return "", &AppError{
+			Op:      "create_session",
+			Message: "failed to create OpenCode session",
+			OC:      buildHTTPOCError(err, "create_session", "", agentName),
+			Err:     err,
+		}
 	}
 	slog.Debug("session created", "id", session.ID, "agent", agentName)
 	return session.ID, nil
@@ -102,22 +109,61 @@ func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params 
 	)
 	if err != nil {
 		slog.Error("prompt failed", "session_id", sessionID, "error", err)
-		return nil, fmt.Errorf("send prompt: %w", wrapPromptError(err, sessionID, c.agent, prompt))
+		return nil, &AppError{
+			Op:      "generate_messages",
+			Message: "OpenCode prompt request failed",
+			OC:      buildHTTPOCError(err, "prompt", sessionID, c.agent),
+			Err:     err,
+		}
 	}
 
-	raw, err := getStructuredJSON(res)
+	if ocErr := buildAPIOCError(&res.Info, "prompt", sessionID, c.agent); ocErr != nil {
+		slog.Error("prompt returned API error", "session_id", sessionID,
+			"error_name", ocErr.Code, "error_message", ocErr.Message)
+		return nil, &AppError{
+			Op:      "generate_messages",
+			Message: "OpenCode returned an error for the prompt request",
+			OC:      ocErr,
+		}
+	}
+
+	rawJSON, err := getStructuredJSON(res)
 	if err != nil {
 		slog.Error("failed to extract structured output", "session_id", sessionID, "error", err)
-		return nil, fmt.Errorf("extract structured output: %w", err)
+		var noStrErr *noStructuredOutputError
+		if errors.As(err, &noStrErr) {
+			return nil, &AppError{
+				Op:      "generate_messages",
+				Message: "OpenCode prompt returned no structured output",
+				OC: &OCError{
+					Kind:        OCErrNoStructuredOutput,
+					RequestType: "prompt",
+					SessionID:   sessionID,
+					Agent:       c.agent,
+					Code:        "no_structured_output",
+					Message:     "structured output was not found in the response",
+					RawJSON:     noStrErr.RawJSON,
+				},
+			}
+		}
+		return nil, &AppError{
+			Op:      "generate_messages",
+			Message: "failed to extract structured output",
+			Err:     err,
+		}
 	}
 
 	var result struct {
 		Subjects []string `json:"subjects"`
 		Body     string   `json:"body"`
 	}
-	if err := json.Unmarshal(raw, &result); err != nil {
-		slog.Error("failed to decode structured output", "session_id", sessionID, "error", err, "raw", string(raw))
-		return nil, fmt.Errorf("decode structured output: %w", err)
+	if err := json.Unmarshal(rawJSON, &result); err != nil {
+		slog.Error("failed to decode structured output", "session_id", sessionID, "error", err, "raw", string(rawJSON))
+		return nil, &AppError{
+			Op:      "generate_messages",
+			Message: "failed to decode structured output",
+			Err:     fmt.Errorf("decode structured output: %w", err),
+		}
 	}
 
 	messages := make([]CommitMessage, len(result.Subjects))
@@ -138,42 +184,63 @@ func (c *Client) DeleteSession(ctx context.Context, sessionID string) error {
 	return err
 }
 
-type promptError struct {
-	StatusCode int
-	Method     string
-	URL        string
-	Body       string
-	SessionID  string
-	Agent      string
-	Prompt     string
-}
-
-func (e *promptError) Error() string {
-	var b []byte
-	b = fmt.Appendf(b, "HTTP %d %s %s", e.StatusCode, e.Method, e.URL)
-	b = fmt.Appendf(b, "\n  Session: %s", e.SessionID)
-	b = fmt.Appendf(b, "\n  Agent:   %s", e.Agent)
-	b = fmt.Appendf(b, "\n  Prompt:  %s", e.Prompt)
-	return string(b)
-}
-
-func wrapPromptError(err error, sessionID, agent, prompt string) error {
-	code, method, url, body := extractHTTPError(err)
-	if code != 0 {
-		return &promptError{
-			StatusCode: code,
-			Method:     method,
-			URL:        url,
-			Body:       body,
-			SessionID:  sessionID,
-			Agent:      agent,
-			Prompt:     prompt,
-		}
+func getStructuredJSON(res *opencode.SessionPromptResponse) ([]byte, error) {
+	if res == nil {
+		return nil, errors.New("nil opencode response")
 	}
-	return err
+
+	for _, key := range []string{"structured", "structured_output"} {
+		field, ok := res.Info.JSON.ExtraFields[key]
+		if !ok {
+			continue
+		}
+
+		raw := field.Raw()
+		if raw == "" || raw == "null" {
+			continue
+		}
+
+		var s string
+		if err := json.Unmarshal([]byte(raw), &s); err == nil {
+			if s != "" {
+				return []byte(s), nil
+			}
+			continue
+		}
+		return []byte(raw), nil
+	}
+
+	rawJSON := res.Info.JSON.RawJSON()
+	slog.Debug("structured output not found in response", "raw", rawJSON)
+	return nil, &noStructuredOutputError{RawJSON: rawJSON}
 }
 
-func extractHTTPError(err error) (code int, method, url, body string) {
+type noStructuredOutputError struct {
+	RawJSON string
+}
+
+func (e *noStructuredOutputError) Error() string {
+	return "structured output was not found in response"
+}
+
+func buildHTTPOCError(err error, requestType, sessionID, agent string) *OCError {
+	code, method, url, body := extractHTTPFields(err)
+	if code == 0 {
+		return nil
+	}
+	return &OCError{
+		Kind:        OCErrHTTP,
+		RequestType: requestType,
+		SessionID:   sessionID,
+		Agent:       agent,
+		Code:        strconv.Itoa(code) + " " + method,
+		Message:     url,
+		Status:      code,
+		RawJSON:     body,
+	}
+}
+
+func extractHTTPFields(err error) (code int, method, url, body string) {
 	v := reflect.Indirect(reflect.ValueOf(err))
 	if v.Kind() != reflect.Struct {
 		return
@@ -207,41 +274,41 @@ func extractHTTPError(err error) (code int, method, url, body string) {
 	return
 }
 
-func getStructuredJSON(res *opencode.SessionPromptResponse) ([]byte, error) {
-	if res == nil {
-		return nil, errors.New("nil opencode response")
+func buildAPIOCError(msg *opencode.AssistantMessage, requestType, sessionID, agent string) *OCError {
+	if msg == nil || msg.Error.Name == "" {
+		return nil
 	}
 
-	for _, key := range []string{"structured", "structured_output"} {
-		field, ok := res.Info.JSON.ExtraFields[key]
-		if !ok {
-			continue
-		}
+	rawJSON := msg.JSON.RawJSON()
 
-		raw := field.Raw()
-		if raw == "" || raw == "null" {
-			continue
-		}
-
-		var s string
-		if err := json.Unmarshal([]byte(raw), &s); err == nil {
-			if s != "" {
-				return []byte(s), nil
-			}
-			continue
-		}
-		return []byte(raw), nil
+	oc := &OCError{
+		Kind:        OCErrAPI,
+		RequestType: requestType,
+		SessionID:   sessionID,
+		Agent:       agent,
+		Code:        string(msg.Error.Name),
+		RawJSON:     rawJSON,
 	}
 
-	rawJSON := res.Info.JSON.RawJSON()
-	slog.Debug("structured output not found in response", "raw", rawJSON)
-	return nil, &responseError{RawJSON: rawJSON}
-}
+	switch u := msg.Error.AsUnion().(type) {
+	case opencode.AssistantMessageErrorAPIError:
+		oc.Message = u.Data.Message
+		oc.Status = int(u.Data.StatusCode)
+	case shared.ProviderAuthError:
+		oc.Message = u.Data.Message
+	case shared.UnknownError:
+		oc.Message = u.Data.Message
+	case shared.MessageAbortedError:
+		oc.Message = u.Data.Message
+	case opencode.AssistantMessageErrorMessageOutputLengthError:
+		if m, ok := u.Data.(string); ok {
+			oc.Message = m
+		}
+	}
 
-type responseError struct {
-	RawJSON string
-}
+	if oc.Message == "" {
+		oc.Message = "(no message in error data)"
+	}
 
-func (e *responseError) Error() string {
-	return "structured output was not found in response:\n" + e.RawJSON
+	return oc
 }

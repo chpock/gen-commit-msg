@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -297,8 +298,17 @@ func main() {
 			os.Exit(1)
 		}
 		selected := m.SelectedMessage()
-		slog.Info("message selected", "message", truncateString(selected, 80))
-		fmt.Println(selected)
+		wrote, writeErr := writeSelectedMessage(os.Stdout, selected)
+		if writeErr != nil {
+			slog.Error("failed to write selected message", "error", writeErr)
+			fmtError("Error: failed to write selected message: %v\n", writeErr)
+			pauseExit(1, true)
+		}
+		if wrote {
+			slog.Info("message selected", "message", truncateString(selected, 80))
+		} else {
+			slog.Info("selection canceled, no message printed")
+		}
 
 		return
 	}
@@ -380,6 +390,17 @@ func formatMessageFromOC(msg opencode.CommitMessage) string {
 		return strings.TrimSpace(msg.Subject)
 	}
 	return strings.TrimSpace(msg.Subject) + "\n\n" + strings.TrimSpace(msg.Body)
+}
+
+func writeSelectedMessage(out io.Writer, selected string) (bool, error) {
+	if strings.TrimSpace(selected) == "" {
+		return false, nil
+	}
+	_, err := fmt.Fprintln(out, selected)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func printServerError(err error) {

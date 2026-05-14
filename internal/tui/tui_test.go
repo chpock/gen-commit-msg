@@ -657,6 +657,31 @@ func TestEnterInResultStateSetsStateDone(t *testing.T) {
 	}
 }
 
+func TestEscInResultStateClearsListWithoutSelection(t *testing.T) {
+	m := NewModel(3, false)
+	msg := SetMessages([]CommitItem{
+		{Subject: "feat: a", Body: ""},
+		{Subject: "feat: b", Body: ""},
+	})
+	updated, _ := m.Update(msg)
+
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updated2, cmd := updated.(Model).Update(escMsg)
+
+	if updated2.(Model).state != stateDone {
+		t.Errorf("state = %v, want stateDone after Esc in stateResult", updated2.(Model).state)
+	}
+	if updated2.(Model).selected != "" {
+		t.Errorf("selected = %q, want empty selection on Esc", updated2.(Model).selected)
+	}
+	if v := updated2.(Model).View(); v != "" {
+		t.Errorf("view = %q, want empty view after Esc", v)
+	}
+	if cmd == nil {
+		t.Error("should return tea.Quit after Esc in stateResult")
+	}
+}
+
 func TestCommitItemDelegateHeightIsOne(t *testing.T) {
 	d := newCommitDelegate()
 	if d.Height() != 1 {

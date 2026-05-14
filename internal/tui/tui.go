@@ -155,6 +155,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		case tea.KeyEsc:
+			if m.state == stateResult {
+				m.selected = ""
+				m.state = stateDone
+				m.quitting = true
+				return m, tea.Quit
+			}
 			m.quitting = true
 			return m, tea.Quit
 		}

@@ -30,7 +30,7 @@ func initFlags() *flag.FlagSet {
 	flags.Bool("body", true, "generate message body")
 	flags.BoolP("quiet", "q", false, "suppress progress output")
 	flags.StringP("agent", "a", "gen-commit-msg", "opencode agent name")
-	flags.StringP("log-level", "l", "none", "log verbosity: none, debug, info, warn, error")
+	flags.StringP("log-level", "l", "none", "log verbosity: trace, debug, info, warn, error, none")
 	flags.String("log-file", "", "log output file (default: stderr)")
 	flags.String("pause", "on-error", "pause before exit: on, off, on-error")
 	flags.String("install-agent", "if-not-exists", "agent install behavior: always, if-not-exists, no")

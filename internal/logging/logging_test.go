@@ -14,11 +14,13 @@ func TestParseLevel(t *testing.T) {
 		input string
 		want  slog.Level
 	}{
+		{"trace", LevelTrace},
 		{"debug", slog.LevelDebug},
 		{"info", slog.LevelInfo},
 		{"warn", slog.LevelWarn},
 		{"error", slog.LevelError},
 		{"none", LevelNone},
+		{"TRACE", LevelTrace},
 		{"DEBUG", slog.LevelDebug},
 		{"INFO", slog.LevelInfo},
 		{"WARN", slog.LevelWarn},

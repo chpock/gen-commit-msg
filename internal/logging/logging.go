@@ -7,10 +7,15 @@ import (
 	"strings"
 )
 
-const LevelNone = slog.LevelError + 10
+const (
+	LevelTrace = slog.LevelDebug - 10
+	LevelNone  = slog.LevelError + 10
+)
 
 func ParseLevel(level string) slog.Level {
 	switch strings.ToLower(level) {
+	case "trace":
+		return LevelTrace
 	case "debug":
 		return slog.LevelDebug
 	case "info":

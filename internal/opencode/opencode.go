@@ -14,6 +14,8 @@ import (
 	opencode "github.com/sst/opencode-sdk-go"
 	"github.com/sst/opencode-sdk-go/option"
 	"github.com/sst/opencode-sdk-go/shared"
+
+	"github.com/chpock/gen-commit-msg/internal/logging"
 )
 
 type GenerateParams struct {
@@ -68,10 +70,19 @@ func newClientWithSession(s sessionClient, repoDir, agent string) *Client {
 
 func (c *Client) CreateSession(ctx context.Context, agentName string) (string, error) {
 	slog.Debug("creating session", "agent", agentName, "dir", c.repoDir)
-	session, err := c.session.New(ctx, opencode.SessionNewParams{
+
+	params := opencode.SessionNewParams{
 		Directory: opencode.F(c.repoDir),
 		Title:     opencode.String(agentName),
-	})
+	}
+
+	if slog.Default().Enabled(ctx, logging.LevelTrace) {
+		paramsJSON, _ := json.Marshal(params)
+		slog.LogAttrs(ctx, logging.LevelTrace, "opencode request: session new",
+			slog.String("params", string(paramsJSON)))
+	}
+
+	session, err := c.session.New(ctx, params)
 	if err != nil {
 		slog.Error("failed to create session", "agent", agentName, "error", err)
 		return "", &AppError{
@@ -81,6 +92,13 @@ func (c *Client) CreateSession(ctx context.Context, agentName string) (string, e
 			Err:     err,
 		}
 	}
+
+	if slog.Default().Enabled(ctx, logging.LevelTrace) {
+		sessionJSON, _ := json.Marshal(session)
+		slog.LogAttrs(ctx, logging.LevelTrace, "opencode response: session new",
+			slog.String("response", string(sessionJSON)))
+	}
+
 	slog.Debug("session created", "id", session.ID, "agent", agentName)
 	return session.ID, nil
 }
@@ -141,19 +159,30 @@ func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params 
 		"retryCount": 2,
 	}
 
+	promptParams := opencode.SessionPromptParams{
+		Directory: opencode.F(c.repoDir),
+		Agent:     opencode.F(c.agent),
+		Parts: opencode.F([]opencode.SessionPromptParamsPartUnion{
+			opencode.TextPartInputParam{
+				Type: opencode.F(opencode.TextPartInputTypeText),
+				Text: opencode.F(prompt),
+			},
+		}),
+	}
+
+	if slog.Default().Enabled(ctx, logging.LevelTrace) {
+		paramsJSON, _ := json.Marshal(promptParams)
+		formatJSON, _ := json.Marshal(format)
+		slog.LogAttrs(ctx, logging.LevelTrace, "opencode request: prompt",
+			slog.String("session_id", sessionID),
+			slog.String("params", string(paramsJSON)),
+			slog.String("format", string(formatJSON)))
+	}
+
 	res, err := c.session.Prompt(
 		ctx,
 		sessionID,
-		opencode.SessionPromptParams{
-			Directory: opencode.F(c.repoDir),
-			Agent:     opencode.F(c.agent),
-			Parts: opencode.F([]opencode.SessionPromptParamsPartUnion{
-				opencode.TextPartInputParam{
-					Type: opencode.F(opencode.TextPartInputTypeText),
-					Text: opencode.F(prompt),
-				},
-			}),
-		},
+		promptParams,
 		option.WithJSONSet("format", format),
 	)
 	if err != nil {
@@ -174,6 +203,13 @@ func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params 
 			Message: "OpenCode returned an error for the prompt request",
 			OC:      ocErr,
 		}
+	}
+
+	if slog.Default().Enabled(ctx, logging.LevelTrace) {
+		respJSON, _ := json.Marshal(res)
+		slog.LogAttrs(ctx, logging.LevelTrace, "opencode response: prompt",
+			slog.String("session_id", sessionID),
+			slog.String("response", string(respJSON)))
 	}
 
 	rawJSON, err := getStructuredJSON(res)
@@ -226,10 +262,28 @@ func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params 
 
 func (c *Client) DeleteSession(ctx context.Context, sessionID string) error {
 	slog.Debug("deleting session", "session_id", sessionID)
+
+	if slog.Default().Enabled(ctx, logging.LevelTrace) {
+		slog.LogAttrs(ctx, logging.LevelTrace, "opencode request: session delete",
+			slog.String("session_id", sessionID))
+	}
+
 	_, err := c.session.Delete(ctx, sessionID, opencode.SessionDeleteParams{})
 	if err != nil {
 		slog.Warn("failed to delete session", "session_id", sessionID, "error", err)
 	}
+
+	if slog.Default().Enabled(ctx, logging.LevelTrace) {
+		deleted := false
+		if err == nil {
+			deleted = true
+		}
+		slog.LogAttrs(ctx, logging.LevelTrace, "opencode response: session delete",
+			slog.String("session_id", sessionID),
+			slog.Bool("deleted", deleted),
+			slog.Any("error", err))
+	}
+
 	return err
 }
 

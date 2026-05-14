@@ -264,7 +264,9 @@ func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params 
 		messages[i] = CommitMessage{Subject: subject, Body: result.Body}
 	}
 
-	slog.Info("messages generated", "session_id", sessionID, "count", len(messages))
+	slog.Info("messages generated", "session_id", sessionID, "count", len(messages), "has_body", result.Body != "")
+	slog.Debug("subjects", "session_id", sessionID, "subjects", result.Subjects)
+	slog.Debug("body", "session_id", sessionID, "body", result.Body)
 	return messages, nil
 }
 

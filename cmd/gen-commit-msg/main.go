@@ -222,7 +222,6 @@ func main() {
 					}
 					p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepFailed, Detail: "Failed to generate commit messages", Err: genAppErr})
 				} else {
-					slog.Info("messages generated", "count", len(messages))
 					p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepDone})
 				}
 			}
@@ -366,7 +365,6 @@ func main() {
 			cleanup()
 			pauseExit(1, true)
 		}
-		slog.Info("messages generated", "count", len(messages))
 		if len(messages) > 0 {
 			fmt.Println(formatMessageFromOC(messages[0]))
 		}

@@ -297,6 +297,37 @@ func TestProgressViewShowsAllSteps(t *testing.T) {
 	}
 }
 
+func TestProgressViewDoesNotEndWithExtraBlankLine(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	labels := stepLabels()
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: labels[i], status: StepDone}
+	}
+
+	v := m.View()
+	if strings.HasSuffix(v, "\n") {
+		t.Fatalf("progress view should not end with trailing newline, got: %q", v)
+	}
+}
+
+func TestProgressViewAddsTrailingNewlineWhenQuitting(t *testing.T) {
+	m := NewModel(5, false)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	labels := stepLabels()
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: labels[i], status: StepRunning}
+	}
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	v := updated.(Model).View()
+	if !strings.HasSuffix(v, "\n") {
+		t.Fatalf("progress view should end with newline while quitting, got: %q", v)
+	}
+}
+
 func TestStepUpdateChangesStatus(t *testing.T) {
 	m := NewModel(5, false)
 	m.state = stateProgress

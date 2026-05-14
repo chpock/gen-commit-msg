@@ -320,7 +320,9 @@ func (m Model) View() string {
 			b.WriteString("\n\n  ")
 			b.WriteString(m.stepDetail)
 		}
-		b.WriteString("\n")
+		if m.quitting {
+			b.WriteString("\n")
+		}
 		return b.String()
 	case stateSpinner:
 		if m.quiet {

@@ -9,7 +9,7 @@ import (
 )
 
 func TestModelInit(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	if m.state != stateProgress {
 		t.Error("initial state should be progress")
 	}
@@ -22,7 +22,7 @@ func TestModelInit(t *testing.T) {
 }
 
 func TestModelInitQuiet(t *testing.T) {
-	m := NewModel(5, true, "")
+	m := NewModel(5, true)
 	if m.state != stateProgress {
 		t.Error("initial state should be progress")
 	}
@@ -32,7 +32,7 @@ func TestModelInitQuiet(t *testing.T) {
 }
 
 func TestQuietInitSkipsSpinner(t *testing.T) {
-	m := NewModel(5, true, "")
+	m := NewModel(5, true)
 	cmd := m.Init()
 	if cmd != nil {
 		t.Error("Init with quiet should return nil, skipping spinner")
@@ -40,7 +40,7 @@ func TestQuietInitSkipsSpinner(t *testing.T) {
 }
 
 func TestModelInitMsg(t *testing.T) {
-	m := NewModel(3, false, "")
+	m := NewModel(3, false)
 	cmd := m.Init()
 	if cmd == nil {
 		t.Error("Init should return a command")
@@ -48,7 +48,7 @@ func TestModelInitMsg(t *testing.T) {
 }
 
 func TestModelQuitOnCtrlC(t *testing.T) {
-	m := NewModel(3, false, "")
+	m := NewModel(3, false)
 	msg := tea.KeyMsg{Type: tea.KeyCtrlC}
 	updated, _ := m.Update(msg)
 	if updated.(Model).quitting != true {
@@ -57,7 +57,7 @@ func TestModelQuitOnCtrlC(t *testing.T) {
 }
 
 func TestModelQuitOnEsc(t *testing.T) {
-	m := NewModel(3, false, "")
+	m := NewModel(3, false)
 	msg := tea.KeyMsg{Type: tea.KeyEsc}
 	updated, _ := m.Update(msg)
 	if updated.(Model).quitting != true {
@@ -88,7 +88,7 @@ func TestSetErrorReturnsGenerationResultMsg(t *testing.T) {
 }
 
 func TestSingleMessageAutoSelect(t *testing.T) {
-	m := NewModel(1, false, "")
+	m := NewModel(1, false)
 	msg := SetMessages([]CommitItem{{Subject: "feat: done", Body: ""}})
 	updated, cmd := m.Update(msg)
 	if updated.(Model).selected != "feat: done" {
@@ -100,7 +100,7 @@ func TestSingleMessageAutoSelect(t *testing.T) {
 }
 
 func TestMultiMessageGoesToResultState(t *testing.T) {
-	m := NewModel(3, false, "")
+	m := NewModel(3, false)
 	msg := SetMessages([]CommitItem{
 		{Subject: "feat: a", Body: ""},
 		{Subject: "feat: b", Body: ""},
@@ -112,7 +112,7 @@ func TestMultiMessageGoesToResultState(t *testing.T) {
 }
 
 func TestZeroMessagesGoesToErrorState(t *testing.T) {
-	m := NewModel(3, false, "")
+	m := NewModel(3, false)
 	msg := SetMessages([]CommitItem{})
 	updated, _ := m.Update(msg)
 	if updated.(Model).state != stateError {
@@ -124,7 +124,7 @@ func TestZeroMessagesGoesToErrorState(t *testing.T) {
 }
 
 func TestErrorMsgGoesToErrorState(t *testing.T) {
-	m := NewModel(3, false, "")
+	m := NewModel(3, false)
 	msg := SetError(fmt.Errorf("server crash"))
 	updated, _ := m.Update(msg)
 	if updated.(Model).state != stateError {
@@ -154,7 +154,7 @@ func TestFormatMessageWithBody(t *testing.T) {
 }
 
 func TestSpinnerView(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateSpinner
 	v := m.View()
 	if !contains(v, "Generating commit messages") {
@@ -163,7 +163,7 @@ func TestSpinnerView(t *testing.T) {
 }
 
 func TestSpinnerViewQuiet(t *testing.T) {
-	m := NewModel(5, true, "")
+	m := NewModel(5, true)
 	m.state = stateSpinner
 	v := m.View()
 	if contains(v, "Generating commit messages") {
@@ -172,7 +172,7 @@ func TestSpinnerViewQuiet(t *testing.T) {
 }
 
 func TestErrorView(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateError
 	m.err = fmt.Errorf("test error")
 	v := m.RenderError()
@@ -185,7 +185,7 @@ func TestErrorView(t *testing.T) {
 }
 
 func TestSelectedMessage(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.selected = "feat: test"
 	if m.SelectedMessage() != "feat: test" {
 		t.Error("SelectedMessage() mismatch")
@@ -193,7 +193,7 @@ func TestSelectedMessage(t *testing.T) {
 }
 
 func TestErrorAccessor(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	err := fmt.Errorf("oops")
 	m.err = err
 	if m.Error() != err {
@@ -202,7 +202,7 @@ func TestErrorAccessor(t *testing.T) {
 }
 
 func TestShouldQuit(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	if m.ShouldQuit() {
 		t.Error("ShouldQuit should be false initially")
 	}
@@ -273,7 +273,7 @@ func contains(s, substr string) bool {
 }
 
 func TestProgressStateInit(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateProgress
 	cmd := m.Init()
 	if cmd == nil {
@@ -282,7 +282,7 @@ func TestProgressStateInit(t *testing.T) {
 }
 
 func TestProgressViewShowsAllSteps(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	labels := stepLabels()
@@ -298,7 +298,7 @@ func TestProgressViewShowsAllSteps(t *testing.T) {
 }
 
 func TestStepUpdateChangesStatus(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	labels := stepLabels()
@@ -313,7 +313,7 @@ func TestStepUpdateChangesStatus(t *testing.T) {
 }
 
 func TestProgressDoneAllStepsTransitionsToResult(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {
@@ -327,7 +327,7 @@ func TestProgressDoneAllStepsTransitionsToResult(t *testing.T) {
 }
 
 func TestStepFailureShowsError(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	labels := stepLabels()
@@ -355,7 +355,7 @@ func TestStepFailureShowsError(t *testing.T) {
 }
 
 func TestProgressViewQuiet(t *testing.T) {
-	m := NewModel(5, true, "")
+	m := NewModel(5, true)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {
@@ -364,33 +364,6 @@ func TestProgressViewQuiet(t *testing.T) {
 	v := m.View()
 	if v != "" {
 		t.Errorf("quiet progress view should be empty, got %q", v)
-	}
-}
-
-func TestSetLogPathMsg(t *testing.T) {
-	msg := SetLogPath("/tmp/test.log")
-	lp, ok := msg.(setLogPathMsg)
-	if !ok {
-		t.Fatal("SetLogPath should return setLogPathMsg")
-	}
-	if lp.path != "/tmp/test.log" {
-		t.Errorf("path = %q, want /tmp/test.log", lp.path)
-	}
-}
-
-func TestProgressViewShowsLogPath(t *testing.T) {
-	m := NewModel(5, false, "")
-	m.state = stateProgress
-	m.steps = make([]stepItem, 5)
-	for i := range m.steps {
-		m.steps[i] = stepItem{label: "step", status: StepPending}
-	}
-	m.logPath = "/tmp/test.log"
-	m.stepDetail = "something failed"
-	m.steps[0].status = StepFailed
-	v := m.View()
-	if !contains(v, "/tmp/test.log") {
-		t.Errorf("progress view missing log path: %q", v)
 	}
 }
 
@@ -403,7 +376,7 @@ func TestAllStepsDoneMsg(t *testing.T) {
 }
 
 func TestKeyQuitOnFailedStep(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	labels := stepLabels()
@@ -422,7 +395,7 @@ func TestKeyQuitOnFailedStep(t *testing.T) {
 }
 
 func TestStepUpdateOutOfBoundsIsIgnored(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {
@@ -447,7 +420,7 @@ func TestStepUpdateOutOfBoundsIsIgnored(t *testing.T) {
 }
 
 func TestSpinnerTickInProgressState(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {
@@ -470,7 +443,7 @@ func TestStepSkippedValue(t *testing.T) {
 }
 
 func TestStepFailureDoesNotAutoSkipDependentSteps(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	labels := stepLabels()
@@ -506,7 +479,7 @@ func TestStepFailureDoesNotAutoSkipDependentSteps(t *testing.T) {
 }
 
 func TestErrorViewShowsSteps(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateError
 	m.err = fmt.Errorf("connection refused")
 	m.steps = make([]stepItem, 5)
@@ -534,7 +507,7 @@ func TestErrorViewShowsSteps(t *testing.T) {
 }
 
 func TestAllStepsDoneWithFailureTransitionsToError(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {
@@ -550,7 +523,7 @@ func TestAllStepsDoneWithFailureTransitionsToError(t *testing.T) {
 }
 
 func TestStepUpdateAcceptedAfterFailure(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {
@@ -575,7 +548,7 @@ func TestStepUpdateAcceptedAfterFailure(t *testing.T) {
 }
 
 func TestExplicitStepSkippedAcceptedAfterFailure(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {
@@ -609,7 +582,7 @@ func TestExplicitStepSkippedAcceptedAfterFailure(t *testing.T) {
 }
 
 func TestAllStepsDoneWithoutErrorGoesToResult(t *testing.T) {
-	m := NewModel(5, false, "")
+	m := NewModel(5, false)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {

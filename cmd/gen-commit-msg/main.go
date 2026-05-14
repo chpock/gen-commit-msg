@@ -114,7 +114,7 @@ func main() {
 	}()
 
 	if isTTY {
-		m := tui.NewModel(int(cfg.SubjectMax), cfg.Quiet, logFilePath(cfg.LogFile))
+		m := tui.NewModel(int(cfg.SubjectMax), cfg.Quiet)
 		tty, closeTTY := openTTY()
 		defer closeTTY()
 		p := tea.NewProgram(m, tea.WithOutput(tty))
@@ -410,13 +410,6 @@ func openTTY() (*os.File, func()) {
 		return os.Stdout, func() {}
 	}
 	return f, func() { _ = f.Close() }
-}
-
-func logFilePath(logFile string) string {
-	if logFile == "" || logFile == "-" {
-		return ""
-	}
-	return logFile
 }
 
 func truncateString(s string, maxLen int) string {

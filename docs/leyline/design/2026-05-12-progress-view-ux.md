@@ -6,14 +6,13 @@ Surfaces: single-screen-ui
 UX spec approved - round 3 - 2026-05-12
 
 Design-interrogation round 1 applied:
-- (S) alternate screen buffer errors ephemeral → added stderr cleanup line + log-file ref
+- (S) alternate screen buffer errors ephemeral → added stderr cleanup line
 - (S) post-TUI cleanup invisible → "Cleaning up..." on stderr
 - (S) step 4/5 failure loses messages → Flow 2b with ⚠ warning, messages still accessible
 - (O) error view surface inconsistency → merged into Progress view
 - (O) screen reader in-place transitions → documented limitation
 - (O) any-key accidental dismissal → 1s debounce + deliberate keybinding
-- (O) no log-file ref in error UX → added "Details:" line
-- (O) sub-40-column undefined → error message + exit
+ - (O) sub-40-column undefined → error message + exit
 - (S) TUI render race → goroutine starts after first View() (see product spec)
 - (O) bright ANSI-dependent → SGR 1 for running, SGR 2 for pending/done
 
@@ -46,7 +45,7 @@ Design-interrogation pass complete - round 1 - 2026-05-12
 ### Flow 2b — Cleanup warning (step 4 or 5 failure after successful generation)
 1. Steps 1-3 complete successfully (✓)
 2. Step 4 or 5 transitions: running → warning (⚠)
-3. Warning message ("Cleanup issue: <detail>") + log-file reference appear below step list
+3. Warning message ("Cleanup issue: <detail>") appears below step list
 4. TUI auto-transitions to message selection view — messages are accessible
 5. User selects message → stdout → exit
 6. Cleanup timeout runs silently
@@ -75,7 +74,6 @@ Reference strings:
 - **Error (step 3)**: `Error: failed to generate commit messages: context canceled`
 - **Warning (step 4/5)**: `Cleanup issue: failed to delete session`
 - **Empty state**: `Error: no commit messages generated`
-- **Log-file ref**: `Details: ~/.config/opencode/logs/gen-commit-msg.log`
 - **Cleanup progress**: `Cleaning up...` (printed to stderr after TUI exits)
 - **Success**: *(silent — selected message is printed to stdout; no success banner)*
 

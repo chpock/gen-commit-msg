@@ -81,10 +81,9 @@ type Model struct {
 	height     int
 	steps      []stepItem
 	stepDetail string
-	logPath    string
 }
 
-func NewModel(subjectMax int, quiet bool, logPath string) Model {
+func NewModel(subjectMax int, quiet bool) Model {
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
 
@@ -108,7 +107,6 @@ func NewModel(subjectMax int, quiet bool, logPath string) Model {
 		steps:      steps,
 		subjectMax: subjectMax,
 		quiet:      quiet,
-		logPath:    logPath,
 	}
 }
 
@@ -135,15 +133,7 @@ func SetError(err error) tea.Msg {
 	return generationResultMsg{err: err}
 }
 
-type setLogPathMsg struct {
-	path string
-}
-
 type allStepsDoneMsg struct{}
-
-func SetLogPath(path string) tea.Msg {
-	return setLogPathMsg{path: path}
-}
 
 func AllStepsDone() tea.Msg {
 	return allStepsDoneMsg{}
@@ -206,9 +196,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			slog.Debug("switched to result state", "item_count", len(items))
 			return m, nil
 		}
-	case setLogPathMsg:
-		m.logPath = msg.path
-		return m, nil
 	case StepUpdateMsg:
 		if m.state == stateProgress {
 			if msg.Index >= 0 && msg.Index < len(m.steps) {
@@ -317,10 +304,6 @@ func (m Model) View() string {
 		if m.stepDetail != "" {
 			b.WriteString("\n\n  ")
 			b.WriteString(m.stepDetail)
-		}
-		if m.logPath != "" {
-			b.WriteString("\n  Details: ")
-			b.WriteString(m.logPath)
 		}
 		b.WriteString("\n")
 		return b.String()

@@ -13,8 +13,8 @@ func TestModelInit(t *testing.T) {
 	if m.state != stateProgress {
 		t.Error("initial state should be progress")
 	}
-	if m.subjectCount != 5 {
-		t.Errorf("subjectCount = %d, want 5", m.subjectCount)
+	if m.subjectMax != 5 {
+		t.Errorf("subjectMax = %d, want 5", m.subjectMax)
 	}
 	if m.quiet {
 		t.Error("quiet should be false")

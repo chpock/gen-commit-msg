@@ -54,15 +54,15 @@ Failure paths:
 
 1. User runs `gen-commit-msg --quiet`
 2. Progress messages (server startup, request sending) and spinner are suppressed
-3. If `--subject-count > 1`: interactive selection list is shown normally (quiet does not suppress it)
-4. If `--subject-count 1`: result prints to stdout directly
+3. If `--subject-max > 1`: interactive selection list is shown normally (quiet does not suppress it)
+4. If `--subject-max 1`: result prints to stdout directly
 5. Server stopped, session deleted
 6. `--pause` behaves identically to non-quiet mode
 7. Exit 0 (or error exit as in Flow 1)
 
-### Flow 3 — Single variant, no body (`--subject-count 1 --body false`)
+### Flow 3 — Single variant, no body (`--subject-min 1 --subject-max 1 --body false`)
 
-1. User runs with `-n 1 --body false`
+1. User runs with `-m 1 -x 1 --body false`
 2. TUI may show spinner briefly (unless `--quiet`)
 3. Only one commit message requested, so no interactive list needed
 4. Result printed to stdout
@@ -84,17 +84,17 @@ Failure paths:
 
 ### Flow 6 — No TTY
 
-**Case A: `--subject-count > 1`**
+**Case A: `--subject-max > 1`**
 
-1. User runs `gen-commit-msg` in a non-TTY context (CI, pipe, `$TERM=dumb`) with default `--subject-count 5`
+1. User runs `gen-commit-msg` in a non-TTY context (CI, pipe, `$TERM=dumb`) with default `--subject-max 5`
 2. Tool detects non-TTY before starting server
-3. `Error: --subject-count > 1 requires an interactive terminal. Use --subject-count 1 for non-interactive mode.` → stderr
+3. `Error: subject range requiring > 1 result needs an interactive terminal. Use --subject-max 1 for non-interactive mode.` → stderr
 4. Exit 1
 5. No server started, no TUI.
 
-**Case B: `--subject-count 1`**
+**Case B: `--subject-max 1`**
 
-1. User runs `gen-commit-msg --subject-count 1` in a non-TTY context
+1. User runs `gen-commit-msg --subject-max 1` in a non-TTY context
 2. Tool checks staged files, starts server silently (no progress output)
 3. Creates session, sends prompt, waits for response
 4. Result printed to stdout

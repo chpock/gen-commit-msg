@@ -42,7 +42,7 @@ func main() {
 	defer func() { _ = closeLog() }()
 
 	slog.Debug("gen-commit-msg starting", "version", version,
-		"subject_count", cfg.SubjectCount, "body", cfg.Body,
+		"subject_min", cfg.SubjectMin, "subject_max", cfg.SubjectMax, "body", cfg.Body,
 		"quiet", cfg.Quiet, "agent", cfg.Agent, "log_level", cfg.LogLevel,
 		"log_file", cfg.LogFile, "pause", cfg.Pause, "install_agent", cfg.InstallAgent)
 
@@ -95,10 +95,10 @@ func main() {
 		pauseExit(1, true)
 	}
 	slog.Debug("repository directory", "dir", repoDir)
-	if !isTTY && cfg.SubjectCount > 1 {
-		slog.Error("non-TTY with subject count > 1",
-			"subject_count", cfg.SubjectCount, "is_tty", isTTY)
-		fmtError("Error: --subject-count > 1 requires an interactive terminal. Use --subject-count 1 for non-interactive mode.\n")
+	if !isTTY && cfg.SubjectMax > 1 {
+		slog.Error("non-TTY with subject max > 1",
+			"subject_max", cfg.SubjectMax, "is_tty", isTTY)
+		fmtError("Error: subject range requiring > 1 result needs an interactive terminal. Use --subject-max 1 for non-interactive mode.\n")
 		pauseExit(1, true)
 	}
 
@@ -114,7 +114,7 @@ func main() {
 	}()
 
 	if isTTY {
-		m := tui.NewModel(int(cfg.SubjectCount), cfg.Quiet)
+		m := tui.NewModel(int(cfg.SubjectMax), cfg.Quiet)
 		tty, closeTTY := openTTY()
 		defer closeTTY()
 		p := tea.NewProgram(m, tea.WithOutput(tty))
@@ -201,8 +201,9 @@ func main() {
 			} else {
 				p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepRunning})
 				genParams := opencode.GenerateParams{
-					SubjectCount: int(cfg.SubjectCount),
-					Body:         cfg.Body,
+					SubjectMin: int(cfg.SubjectMin),
+					SubjectMax: int(cfg.SubjectMax),
+					Body:       cfg.Body,
 				}
 				var genErr error
 				messages, genErr = oc.GenerateMessages(ctx, sessionID, genParams)
@@ -330,12 +331,13 @@ func main() {
 	slog.Info("session created", "id", sessionID, "agent", cfg.Agent)
 
 	genParams := opencode.GenerateParams{
-		SubjectCount: int(cfg.SubjectCount),
-		Body:         cfg.Body,
+		SubjectMin: int(cfg.SubjectMin),
+		SubjectMax: int(cfg.SubjectMax),
+		Body:       cfg.Body,
 	}
 
-	if !isTTY && cfg.SubjectCount == 1 {
-		slog.Debug("non-interactive mode", "subject_count", cfg.SubjectCount)
+	if !isTTY && cfg.SubjectMax == 1 {
+		slog.Debug("non-interactive mode", "subject_min", cfg.SubjectMin, "subject_max", cfg.SubjectMax)
 		messages, err := oc.GenerateMessages(ctx, sessionID, genParams)
 		if err != nil {
 			slog.Error("failed to generate messages", "error", err)

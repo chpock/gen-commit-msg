@@ -10,7 +10,8 @@ import (
 )
 
 type Config struct {
-	SubjectCount uint
+	SubjectMin   uint
+	SubjectMax   uint
 	Body         bool
 	Quiet        bool
 	Agent        string
@@ -24,7 +25,8 @@ type Config struct {
 
 func initFlags() *flag.FlagSet {
 	flags := flag.NewFlagSet("gen-commit-msg", flag.ContinueOnError)
-	flags.UintP("subject-count", "n", 5, "number of subject variants")
+	flags.UintP("subject-min", "m", 1, "minimum number of subject variants")
+	flags.UintP("subject-max", "x", 5, "maximum number of subject variants")
 	flags.Bool("body", true, "generate message body")
 	flags.BoolP("quiet", "q", false, "suppress progress output")
 	flags.StringP("agent", "a", "gen-commit-msg", "opencode agent name")
@@ -54,7 +56,8 @@ func ParseFlags() (*Config, error) {
 		return cfg, nil
 	}
 
-	cfg.SubjectCount = getUintFlagOrEnv(flags, "subject-count", "GCM_SUBJECT_COUNT", 5)
+	cfg.SubjectMin = getUintFlagOrEnv(flags, "subject-min", "GCM_SUBJECT_MIN", 1)
+	cfg.SubjectMax = getUintFlagOrEnv(flags, "subject-max", "GCM_SUBJECT_MAX", 5)
 	cfg.Body = getBoolFlagOrEnv(flags, "body", "GCM_BODY", true)
 	cfg.Quiet = getBoolFlagOrEnv(flags, "quiet", "GCM_QUIET", false)
 	cfg.Agent = getStringFlagOrEnv(flags, "agent", "GCM_AGENT", "gen-commit-msg")
@@ -62,6 +65,16 @@ func ParseFlags() (*Config, error) {
 	cfg.LogFile = getStringFlagOrEnv(flags, "log-file", "GCM_LOG_FILE", "")
 	cfg.Pause = getStringFlagOrEnv(flags, "pause", "GCM_PAUSE", "on-error")
 	cfg.InstallAgent = getStringFlagOrEnv(flags, "install-agent", "GCM_INSTALL_AGENT", "if-not-exists")
+
+	if cfg.SubjectMin < 1 {
+		return nil, fmt.Errorf("subject-min must be at least 1, got %d", cfg.SubjectMin)
+	}
+	if cfg.SubjectMax > 20 {
+		return nil, fmt.Errorf("subject-max must not exceed 20, got %d", cfg.SubjectMax)
+	}
+	if cfg.SubjectMax < cfg.SubjectMin {
+		return nil, fmt.Errorf("subject-max (%d) must be >= subject-min (%d)", cfg.SubjectMax, cfg.SubjectMin)
+	}
 
 	return cfg, nil
 }

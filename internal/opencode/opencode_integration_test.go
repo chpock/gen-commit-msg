@@ -42,8 +42,9 @@ func TestClient_GenerateMessages_Success_Basic(t *testing.T) {
 	client := newClientWithSession(mock, "/tmp/repo", "test-agent")
 
 	msgs, err := client.GenerateMessages(context.Background(), "sess_001", GenerateParams{
-		SubjectCount: 3,
-		Body:         true,
+		SubjectMin: 1,
+		SubjectMax: 3,
+		Body:       true,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -64,8 +65,9 @@ func TestClient_GenerateMessages_Success_NoBody(t *testing.T) {
 	client := newClientWithSession(mock, "/tmp/repo", "test-agent")
 
 	msgs, err := client.GenerateMessages(context.Background(), "sess_001", GenerateParams{
-		SubjectCount: 1,
-		Body:         false,
+		SubjectMin: 1,
+		SubjectMax: 1,
+		Body:       false,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -86,8 +88,9 @@ func TestClient_GenerateMessages_Success_ManySubjects(t *testing.T) {
 	client := newClientWithSession(mock, "/tmp/repo", "test-agent")
 
 	msgs, err := client.GenerateMessages(context.Background(), "sess_001", GenerateParams{
-		SubjectCount: 5,
-		Body:         true,
+		SubjectMin: 1,
+		SubjectMax: 5,
+		Body:       true,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -119,8 +122,9 @@ func TestClient_GenerateMessages_Success_StructuredOutput(t *testing.T) {
 	client := newClientWithSession(mock, "/tmp/repo", "test-agent")
 
 	msgs, err := client.GenerateMessages(context.Background(), "sess_001", GenerateParams{
-		SubjectCount: 1,
-		Body:         true,
+		SubjectMin: 1,
+		SubjectMax: 1,
+		Body:       true,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -138,7 +142,8 @@ func TestClient_GenerateMessages_APIError(t *testing.T) {
 	client := newClientWithSession(mock, "/tmp/repo", "test-agent")
 
 	_, err := client.GenerateMessages(context.Background(), "sess_001", GenerateParams{
-		SubjectCount: 3,
+		SubjectMin: 1,
+		SubjectMax: 3,
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -172,7 +177,8 @@ func TestClient_GenerateMessages_ProviderAuthError(t *testing.T) {
 	client := newClientWithSession(mock, "/tmp/repo", "test-agent")
 
 	_, err := client.GenerateMessages(context.Background(), "sess_001", GenerateParams{
-		SubjectCount: 1,
+		SubjectMin: 1,
+		SubjectMax: 1,
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -197,7 +203,8 @@ func TestClient_GenerateMessages_MessageAbortedError(t *testing.T) {
 	client := newClientWithSession(mock, "/tmp/repo", "test-agent")
 
 	_, err := client.GenerateMessages(context.Background(), "sess_001", GenerateParams{
-		SubjectCount: 1,
+		SubjectMin: 1,
+		SubjectMax: 1,
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -219,7 +226,8 @@ func TestClient_GenerateMessages_UnknownError(t *testing.T) {
 	client := newClientWithSession(mock, "/tmp/repo", "test-agent")
 
 	_, err := client.GenerateMessages(context.Background(), "sess_001", GenerateParams{
-		SubjectCount: 1,
+		SubjectMin: 1,
+		SubjectMax: 1,
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -241,7 +249,8 @@ func TestClient_GenerateMessages_NoStructuredOutput(t *testing.T) {
 	client := newClientWithSession(mock, "/tmp/repo", "test-agent")
 
 	_, err := client.GenerateMessages(context.Background(), "sess_001", GenerateParams{
-		SubjectCount: 1,
+		SubjectMin: 1,
+		SubjectMax: 1,
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -266,7 +275,8 @@ func TestClient_GenerateMessages_EmptyStructured(t *testing.T) {
 	client := newClientWithSession(mock, "/tmp/repo", "test-agent")
 
 	_, err := client.GenerateMessages(context.Background(), "sess_001", GenerateParams{
-		SubjectCount: 1,
+		SubjectMin: 1,
+		SubjectMax: 1,
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -288,7 +298,8 @@ func TestClient_GenerateMessages_NullStructured(t *testing.T) {
 	client := newClientWithSession(mock, "/tmp/repo", "test-agent")
 
 	_, err := client.GenerateMessages(context.Background(), "sess_001", GenerateParams{
-		SubjectCount: 1,
+		SubjectMin: 1,
+		SubjectMax: 1,
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -310,7 +321,8 @@ func TestClient_GenerateMessages_TransportError(t *testing.T) {
 	client := newClientWithSession(mock, "/tmp/repo", "test-agent")
 
 	_, err := client.GenerateMessages(context.Background(), "sess_001", GenerateParams{
-		SubjectCount: 1,
+		SubjectMin: 1,
+		SubjectMax: 1,
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -361,8 +373,9 @@ func TestClient_FullLifecycle(t *testing.T) {
 	}
 
 	msgs, err := client.GenerateMessages(ctx, sessionID, GenerateParams{
-		SubjectCount: 3,
-		Body:         true,
+		SubjectMin: 1,
+		SubjectMax: 3,
+		Body:       true,
 	})
 	if err != nil {
 		t.Fatalf("generate messages: %v", err)

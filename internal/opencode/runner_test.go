@@ -35,8 +35,9 @@ func TestPipelineRunner_Success(t *testing.T) {
 	}
 
 	result := runner.Run(context.Background(), GenerateParams{
-		SubjectCount: 3,
-		Body:         true,
+		SubjectMin: 1,
+		SubjectMax: 3,
+		Body:       true,
 	})
 	if result.Error != nil {
 		t.Fatalf("unexpected error: %v", result.Error)
@@ -73,7 +74,7 @@ func TestPipelineRunner_AgentSetupError(t *testing.T) {
 		},
 	}
 
-	result := runner.Run(context.Background(), GenerateParams{SubjectCount: 1})
+	result := runner.Run(context.Background(), GenerateParams{SubjectMin: 1, SubjectMax: 1})
 	if result.Error == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -106,7 +107,7 @@ func TestPipelineRunner_ServerStartError(t *testing.T) {
 		},
 	}
 
-	result := runner.Run(context.Background(), GenerateParams{SubjectCount: 1})
+	result := runner.Run(context.Background(), GenerateParams{SubjectMin: 1, SubjectMax: 1})
 	if result.Error == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -139,7 +140,7 @@ func TestPipelineRunner_SessionCreateError(t *testing.T) {
 		},
 	}
 
-	result := runner.Run(context.Background(), GenerateParams{SubjectCount: 1})
+	result := runner.Run(context.Background(), GenerateParams{SubjectMin: 1, SubjectMax: 1})
 	if result.Error == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -168,7 +169,7 @@ func TestPipelineRunner_GenerateError(t *testing.T) {
 		},
 	}
 
-	result := runner.Run(context.Background(), GenerateParams{SubjectCount: 1})
+	result := runner.Run(context.Background(), GenerateParams{SubjectMin: 1, SubjectMax: 1})
 	if result.Error == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -212,7 +213,8 @@ func TestPipelineRunner_StopAfterSuccess(t *testing.T) {
 	}
 
 	result := runner.Run(context.Background(), GenerateParams{
-		SubjectCount: 1,
+		SubjectMin: 1,
+		SubjectMax: 1,
 	})
 	if result.Error != nil {
 		t.Fatalf("unexpected error: %v", result.Error)

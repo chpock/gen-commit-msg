@@ -67,24 +67,24 @@ func (i CommitItem) Description() string { return i.Body }
 func (i CommitItem) FilterValue() string { return i.Subject }
 
 type Model struct {
-	state        state
-	spinner      spinner.Model
-	list         list.Model
-	messages     []CommitItem
-	selected     string
-	quitting     bool
-	err          error
-	appErr       *opencode.AppError
-	subjectCount int
-	quiet        bool
-	width        int
-	height       int
-	steps        []stepItem
-	stepDetail   string
-	logPath      string
+	state      state
+	spinner    spinner.Model
+	list       list.Model
+	messages   []CommitItem
+	selected   string
+	quitting   bool
+	err        error
+	appErr     *opencode.AppError
+	subjectMax int
+	quiet      bool
+	width      int
+	height     int
+	steps      []stepItem
+	stepDetail string
+	logPath    string
 }
 
-func NewModel(subjectCount int, quiet bool) Model {
+func NewModel(subjectMax int, quiet bool) Model {
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
 
@@ -102,12 +102,12 @@ func NewModel(subjectCount int, quiet bool) Model {
 	}
 
 	return Model{
-		state:        stateProgress,
-		spinner:      s,
-		list:         l,
-		steps:        steps,
-		subjectCount: subjectCount,
-		quiet:        quiet,
+		state:      stateProgress,
+		spinner:    s,
+		list:       l,
+		steps:      steps,
+		subjectMax: subjectMax,
+		quiet:      quiet,
 	}
 }
 

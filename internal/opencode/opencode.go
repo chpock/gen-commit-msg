@@ -17,8 +17,9 @@ import (
 )
 
 type GenerateParams struct {
-	SubjectCount int
-	Body         bool
+	SubjectMin int
+	SubjectMax int
+	Body       bool
 }
 
 type CommitMessage struct {
@@ -86,12 +87,33 @@ func (c *Client) CreateSession(ctx context.Context, agentName string) (string, e
 
 func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params GenerateParams) ([]CommitMessage, error) {
 	slog.Info("sending generation prompt", "session_id", sessionID,
-		"subject_count", params.SubjectCount, "body", params.Body, "dir", c.repoDir)
+		"subject_min", params.SubjectMin, "subject_max", params.SubjectMax, "body", params.Body, "dir", c.repoDir)
 
 	prompt := fmt.Sprintf(
-		"Analyze the current repository changes and generate %d Git commit message candidates."+
-			" Include message body: %v.",
-		params.SubjectCount, params.Body,
+		"Analyze staged repository changes and generate Git commit message candidates.\n\n"+
+			"Subject count:\n"+
+			"- Minimum subjects: %[1]d\n"+
+			"- Maximum subjects: %[2]d\n"+
+			"- Choose the optimal number of subjects within this inclusive range.\n"+
+			"- Use the minimum when the change is small or has one clear interpretation.\n"+
+			"- Use more subjects only when the staged changes support genuinely useful alternatives.\n"+
+			"- Use the maximum only when the change is substantial or can be accurately described from several useful angles.\n"+
+			"- Do not pad the subjects array with weak or repetitive candidates.\n"+
+			"- Sort subjects by preference, best first.\n"+
+			"- The first subject must be the single best commit message choice.\n\n"+
+			"Body:\n"+
+			"- Include body: %[3]t\n"+
+			"- If body is not requested, return an empty string for body.\n"+
+			"- If body is requested, return an empty string when the best subject fully describes the change.\n\n"+
+			"Scope:\n"+
+			"- Use staged changes only.\n"+
+			"- Follow repository-specific commit message instructions when present.\n"+
+			"- If no repository instructions exist, follow the style of the last 5 commits.\n"+
+			"- Otherwise use the default Conventional Commits rules from the active agent.\n\n"+
+			"Return only JSON matching the supplied schema.",
+		params.SubjectMin,
+		params.SubjectMax,
+		params.Body,
 	)
 
 	format := map[string]any{
@@ -102,7 +124,8 @@ func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params 
 			"properties": map[string]any{
 				"subjects": map[string]any{
 					"type":        "array",
-					"minItems":    1,
+					"minItems":    params.SubjectMin,
+					"maxItems":    params.SubjectMax,
 					"description": "Candidate subjects for a Git commit message.",
 					"items": map[string]any{
 						"type": "string",

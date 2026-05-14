@@ -20,12 +20,12 @@ Generating high-quality git commit messages manually is tedious. opencode can ge
 - Handle SIGINT and SIGTERM signals for graceful shutdown (session deletion, server stop) before exit
 - On any exit path (success or error), delete the opencode session and shut down the server in a `defer` block with a 5-second timeout. SIGKILL session leaks are an accepted risk
 - Idempotently create an agent `.md` file at `${XDG_CONFIG_HOME:-$HOME/.config}/opencode/agents/<agent-name>.md` (the agent name comes from `--agent`, default `gen-commit-msg`)
-- Create an opencode session and prompt it to generate commit messages, passing `--subject-count` and `--body` as prompt parameters and requesting structured JSON output (opencode accesses the git diff on its own)
+- Create an opencode session and prompt it to generate commit messages, passing `--subject-min` / `--subject-max` and `--body` as prompt parameters and requesting structured JSON output (opencode accesses the git diff on its own)
 - Delete the session and shut down the opencode server process after completion
 - Display a TUI with a spinner during generation, then an interactive list of variants (subject + optional body)
 - On user selection, output the chosen message to stdout
 - Configurable via CLI flags and environment variables with clear precedence (flag > env > default)
-- Autodetect non-TTY context: if not a terminal and `--subject-count > 1`, error with a message suggesting `--subject-count 1`. If not a terminal and `--subject-count 1`, run generation silently and print the result to stdout — no TUI, no progress output
+- Autodetect non-TTY context: if not a terminal and `--subject-max > 1`, error with a message suggesting `--subject-max 1`. If not a terminal and `--subject-max 1`, run generation silently and print the result to stdout — no TUI, no progress output
 
 ## Non-goals
 
@@ -103,7 +103,8 @@ Priority: CLI flag > env var > default.
 | `--help` | `-h` | — | — | — | Print help and exit |
 | `--log-level` | `-l` | `GCM_LOG_LEVEL` | none, debug, info, warn, error | none | Log verbosity |
 | `--log-file` | | `GCM_LOG_FILE` | path | (stderr) | Log output destination |
-| `--subject-count` | `-n` | `GCM_SUBJECT_COUNT` | 1..N | 5 | Number of subject line variants to request |
+| `--subject-min` | `-m` | `GCM_SUBJECT_MIN` | 1..N | 1 | Minimum number of subject line variants to request |
+| `--subject-max` | `-x` | `GCM_SUBJECT_MAX` | 1..20 | 5 | Maximum number of subject line variants to request |
 | `--body` | | `GCM_BODY` | true, false | true | Whether to generate message body |
 | `--quiet` | `-q` | `GCM_QUIET` | true, false | false | Suppress progress messages and spinner (not the selection list) |
 | `--agent` | `-a` | `GCM_AGENT` | string | gen-commit-msg | opencode agent name |
@@ -112,7 +113,7 @@ Priority: CLI flag > env var > default.
 
 Server hostname (`127.0.0.1`) and startup timeout (30s) are constants in the `server` package — not exposed as flags. Generation timeout (120s) is a constant in the `opencode` package.
 
-`--quiet` suppresses only progress output (server startup messages, request-sending status, spinner). It does NOT suppress the interactive subject selection list when `--subject-count > 1`. It does NOT affect `--pause` behavior.
+`--quiet` suppresses only progress output (server startup messages, request-sending status, spinner). It does NOT suppress the interactive subject selection list when `--subject-max > 1`. It does NOT affect `--pause` behavior.
 
 `--agent <name>` changes the agent file path to `${XDG_CONFIG_HOME:-$HOME/.config}/opencode/agents/<name>.md` and the opencode agent name used in the session.
 
@@ -142,11 +143,11 @@ Rules:
 - `go build ./cmd/gen-commit-msg` produces a working binary
 - Running in a git repo with staged changes: starts server, shows TUI, generates messages
 - Running in a git repo with no staged changes: exits silently
-- `--subject-count 1 --body false`: returns exactly one subject line, no body
+- `--subject-min 1 --subject-max 1 --body false`: returns exactly one subject line, no body
 - Server starts within 30s timeout by parsing stdout for the listening URL, followed by a lightweight API health-check; server child process has `Pdeathsig: SIGKILL` set
 - SIGINT and SIGTERM trigger graceful shutdown (session deletion, server stop) before exit
 - Session deletion and server shutdown run in a `defer` block on all exit paths (success and error)
 - Agent file is created idempotently (not overwritten if it exists, unless `--install-agent always`); `--install-agent no` never installs and relies on opencode error for missing agent
 - All flags have corresponding env var overrides with correct precedence
-- Running without a TTY and `--subject-count > 1`: errors with a clear message suggesting `--subject-count 1`
-- Running without a TTY and `--subject-count 1`: generates silently, prints result to stdout, no TUI
+- Running without a TTY and `--subject-max > 1`: errors with a clear message suggesting `--subject-max 1`
+- Running without a TTY and `--subject-max 1`: generates silently, prints result to stdout, no TUI

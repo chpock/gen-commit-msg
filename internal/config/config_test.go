@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -12,8 +13,11 @@ func TestParseFlagsDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.SubjectCount != 5 {
-		t.Errorf("SubjectCount = %d, want 5", cfg.SubjectCount)
+	if cfg.SubjectMin != 1 {
+		t.Errorf("SubjectMin = %d, want 1", cfg.SubjectMin)
+	}
+	if cfg.SubjectMax != 5 {
+		t.Errorf("SubjectMax = %d, want 5", cfg.SubjectMax)
 	}
 	if !cfg.Body {
 		t.Errorf("Body = false, want true")
@@ -37,10 +41,12 @@ func TestParseFlagsDefaults(t *testing.T) {
 
 func TestParseFlagsEnvVars(t *testing.T) {
 	os.Args = []string{"gen-commit-msg"}
-	_ = os.Setenv("GCM_SUBJECT_COUNT", "3")
+	_ = os.Setenv("GCM_SUBJECT_MIN", "2")
+	_ = os.Setenv("GCM_SUBJECT_MAX", "8")
 	_ = os.Setenv("GCM_BODY", "false")
 	t.Cleanup(func() {
-		_ = os.Unsetenv("GCM_SUBJECT_COUNT")
+		_ = os.Unsetenv("GCM_SUBJECT_MIN")
+		_ = os.Unsetenv("GCM_SUBJECT_MAX")
 		_ = os.Unsetenv("GCM_BODY")
 	})
 
@@ -48,8 +54,11 @@ func TestParseFlagsEnvVars(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.SubjectCount != 3 {
-		t.Errorf("SubjectCount = %d, want 3", cfg.SubjectCount)
+	if cfg.SubjectMin != 2 {
+		t.Errorf("SubjectMin = %d, want 2", cfg.SubjectMin)
+	}
+	if cfg.SubjectMax != 8 {
+		t.Errorf("SubjectMax = %d, want 8", cfg.SubjectMax)
 	}
 	if cfg.Body != false {
 		t.Errorf("Body = true, want false")
@@ -58,8 +67,12 @@ func TestParseFlagsEnvVars(t *testing.T) {
 
 func TestParseFlagsVersionEarlyReturn(t *testing.T) {
 	os.Args = []string{"gen-commit-msg", "--version"}
-	_ = os.Setenv("GCM_SUBJECT_COUNT", "100")
-	t.Cleanup(func() { _ = os.Unsetenv("GCM_SUBJECT_COUNT") })
+	_ = os.Setenv("GCM_SUBJECT_MIN", "100")
+	_ = os.Setenv("GCM_SUBJECT_MAX", "200")
+	t.Cleanup(func() {
+		_ = os.Unsetenv("GCM_SUBJECT_MIN")
+		_ = os.Unsetenv("GCM_SUBJECT_MAX")
+	})
 
 	cfg, err := ParseFlags()
 	if err != nil {
@@ -68,22 +81,32 @@ func TestParseFlagsVersionEarlyReturn(t *testing.T) {
 	if !cfg.Version {
 		t.Error("Version should be true when --version flag is set")
 	}
-	if cfg.SubjectCount != 0 {
-		t.Errorf("SubjectCount = %d, want 0 (env should not be read on early return)", cfg.SubjectCount)
+	if cfg.SubjectMin != 0 {
+		t.Errorf("SubjectMin = %d, want 0 (env should not be read on early return)", cfg.SubjectMin)
+	}
+	if cfg.SubjectMax != 0 {
+		t.Errorf("SubjectMax = %d, want 0 (env should not be read on early return)", cfg.SubjectMax)
 	}
 }
 
 func TestParseFlagsCLIOverridesEnv(t *testing.T) {
-	os.Args = []string{"gen-commit-msg", "--subject-count", "7"}
-	_ = os.Setenv("GCM_SUBJECT_COUNT", "3")
-	t.Cleanup(func() { _ = os.Unsetenv("GCM_SUBJECT_COUNT") })
+	os.Args = []string{"gen-commit-msg", "--subject-min", "2", "--subject-max", "8"}
+	_ = os.Setenv("GCM_SUBJECT_MIN", "1")
+	_ = os.Setenv("GCM_SUBJECT_MAX", "3")
+	t.Cleanup(func() {
+		_ = os.Unsetenv("GCM_SUBJECT_MIN")
+		_ = os.Unsetenv("GCM_SUBJECT_MAX")
+	})
 
 	cfg, err := ParseFlags()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.SubjectCount != 7 {
-		t.Errorf("SubjectCount = %d, want 7 (CLI overrides env)", cfg.SubjectCount)
+	if cfg.SubjectMin != 2 {
+		t.Errorf("SubjectMin = %d, want 2 (CLI overrides env)", cfg.SubjectMin)
+	}
+	if cfg.SubjectMax != 8 {
+		t.Errorf("SubjectMax = %d, want 8 (CLI overrides env)", cfg.SubjectMax)
 	}
 }
 
@@ -96,9 +119,53 @@ func TestParseFlagsUnknownFlag(t *testing.T) {
 }
 
 func TestParseFlagsInvalidValue(t *testing.T) {
-	os.Args = []string{"gen-commit-msg", "--subject-count", "abc"}
+	os.Args = []string{"gen-commit-msg", "--subject-min", "abc"}
 	_, err := ParseFlags()
 	if err == nil {
 		t.Fatal("expected error for invalid flag value")
+	}
+}
+
+func TestParseFlagsValidationSubjectMinLessThanOne(t *testing.T) {
+	os.Args = []string{"gen-commit-msg", "--subject-min", "0"}
+	_, err := ParseFlags()
+	if err == nil {
+		t.Fatal("expected error for subject-min < 1")
+	}
+	if !strings.Contains(err.Error(), "subject-min must be at least 1") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestParseFlagsValidationSubjectMaxLessThanMin(t *testing.T) {
+	os.Args = []string{"gen-commit-msg", "--subject-min", "5", "--subject-max", "3"}
+	_, err := ParseFlags()
+	if err == nil {
+		t.Fatal("expected error for subject-max < subject-min")
+	}
+	if !strings.Contains(err.Error(), "subject-max") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestParseFlagsValidationSubjectMaxGreaterThan20(t *testing.T) {
+	os.Args = []string{"gen-commit-msg", "--subject-max", "21"}
+	_, err := ParseFlags()
+	if err == nil {
+		t.Fatal("expected error for subject-max > 20")
+	}
+	if !strings.Contains(err.Error(), "subject-max must not exceed 20") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestParseFlagsValidationSubjectMinMaxEqual(t *testing.T) {
+	os.Args = []string{"gen-commit-msg", "--subject-min", "3", "--subject-max", "3"}
+	cfg, err := ParseFlags()
+	if err != nil {
+		t.Fatalf("unexpected error for subject-min == subject-max: %v", err)
+	}
+	if cfg.SubjectMin != 3 || cfg.SubjectMax != 3 {
+		t.Errorf("SubjectMin=%d SubjectMax=%d, want both 3", cfg.SubjectMin, cfg.SubjectMax)
 	}
 }

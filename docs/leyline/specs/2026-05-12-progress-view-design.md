@@ -28,7 +28,7 @@ Currently, when the user runs `gen-commit-msg`, there is no feedback during serv
 
 ## Constraints
 - Must use bubbletea (existing TUI framework)
-- Must not break non-TTY mode (`--subject-count 1` without terminal)
+- Must not break non-TTY mode (`--subject-max 1` without terminal)
 - Must respect `--quiet` flag (hide progress)
 - Must respect `--pause` flag on error exit
 

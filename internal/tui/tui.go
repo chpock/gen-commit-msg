@@ -270,24 +270,29 @@ func formatMessage(item CommitItem) string {
 }
 
 func (m Model) renderSteps(b *strings.Builder) {
-	bold := lipgloss.NewStyle().Bold(true)
 	faint := lipgloss.NewStyle().Faint(true)
+	pendingIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render
+	runningIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render
+	runningLabel := lipgloss.NewStyle().Bold(true).Render
 	doneIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render
 	failIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render
 	warnIcon := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render
 	skipIcon := lipgloss.NewStyle().Faint(true).Render
-	for _, s := range m.steps {
-		b.WriteString("\n  ")
+	for i, s := range m.steps {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("  ")
 		switch s.status {
 		case StepPending:
-			b.WriteString(faint.Render("  "))
+			b.WriteString(pendingIcon("-"))
 			b.WriteString(" ")
 			b.WriteString(faint.Render(s.label))
 			continue
 		case StepRunning:
-			b.WriteString(m.spinner.View())
+			b.WriteString(runningIcon(m.spinner.View()))
 			b.WriteString(" ")
-			b.WriteString(bold.Render(s.label))
+			b.WriteString(runningLabel(s.label))
 			continue
 		case StepDone:
 			b.WriteString(doneIcon("✓"))

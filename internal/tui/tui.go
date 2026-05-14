@@ -84,7 +84,7 @@ type Model struct {
 	logPath    string
 }
 
-func NewModel(subjectMax int, quiet bool) Model {
+func NewModel(subjectMax int, quiet bool, logPath string) Model {
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
 
@@ -108,6 +108,7 @@ func NewModel(subjectMax int, quiet bool) Model {
 		steps:      steps,
 		subjectMax: subjectMax,
 		quiet:      quiet,
+		logPath:    logPath,
 	}
 }
 

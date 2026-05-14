@@ -114,15 +114,10 @@ func main() {
 	}()
 
 	if isTTY {
-		m := tui.NewModel(int(cfg.SubjectMax), cfg.Quiet)
+		m := tui.NewModel(int(cfg.SubjectMax), cfg.Quiet, logFilePath(cfg.LogFile))
 		tty, closeTTY := openTTY()
 		defer closeTTY()
 		p := tea.NewProgram(m, tea.WithOutput(tty))
-
-		logPath := logFilePath(cfg.LogFile)
-		if logPath != "" {
-			p.Send(tui.SetLogPath(logPath))
-		}
 
 		go func() {
 			var srv *server.ProcessServer

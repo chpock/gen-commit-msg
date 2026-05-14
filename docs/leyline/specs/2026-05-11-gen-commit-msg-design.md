@@ -22,7 +22,7 @@ Generating high-quality git commit messages manually is tedious. opencode can ge
 - Idempotently create an agent `.md` file at `${XDG_CONFIG_HOME:-$HOME/.config}/opencode/agents/<agent-name>.md` (the agent name comes from `--agent`, default `gen-commit-msg`)
 - Create an opencode session and prompt it to generate commit messages, passing `--subject-min` / `--subject-max` and `--body` as prompt parameters and requesting structured JSON output (opencode accesses the git diff on its own)
 - Delete the session and shut down the opencode server process after completion
-- Display a TUI with a spinner during generation, then an interactive list of variants (subject + optional body)
+- Display a TUI with a progress view (5 steps) during generation, then an interactive inline list of subject line variants (one per line, no body in list; body only appears in final stdout output)
 - On user selection, output the chosen message to stdout
 - Configurable via CLI flags and environment variables with clear precedence (flag > env > default)
 - Autodetect non-TTY context: if not a terminal and `--subject-max > 1`, error with a message suggesting `--subject-max 1`. If not a terminal and `--subject-max 1`, run generation silently and print the result to stdout — no TUI, no progress output

@@ -264,13 +264,11 @@ func main() {
 
 			time.Sleep(300 * time.Millisecond)
 
-			if len(messages) > 0 {
-				items := make([]tui.CommitItem, len(messages))
-				for i, msg := range messages {
-					items[i] = tui.CommitItem{Subject: msg.Subject, Body: msg.Body}
-				}
-				p.Send(tui.SetMessages(items))
+			items := make([]tui.CommitItem, len(messages))
+			for i, msg := range messages {
+				items[i] = tui.CommitItem{Subject: msg.Subject, Body: msg.Body}
 			}
+			p.Send(tui.SetMessages(items))
 
 			p.Send(tui.AllStepsDone())
 		}()

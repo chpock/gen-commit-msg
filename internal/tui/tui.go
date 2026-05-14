@@ -92,6 +92,8 @@ func NewModel(subjectMax int, quiet bool) Model {
 	l := list.New([]list.Item{}, delegate, 40, 10)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
+	l.SetShowHelp(false)
+	l.SetShowPagination(false)
 	l.SetFilteringEnabled(false)
 	l.DisableQuitKeybindings()
 
@@ -198,6 +200,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				items[i] = cm
 			}
 			m.list.SetItems(items)
+			m.list.SetSize(m.list.Width(), len(m.messages))
 			m.state = stateResult
 			slog.Debug("switched to result state", "item_count", len(items))
 			return m, nil
@@ -250,6 +253,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key, ok := msg.(tea.KeyMsg); ok && key.Type == tea.KeyEnter {
 			if item, ok := m.list.SelectedItem().(CommitItem); ok {
 				m.selected = formatMessage(item)
+				m.state = stateDone
 				return m, tea.Quit
 			}
 		}
@@ -403,29 +407,23 @@ func (d commitItemDelegate) Render(w io.Writer, m list.Model, index int, item li
 	}
 
 	var (
-		titleStyle, descStyle lipgloss.Style
-		prefix                string
+		titleStyle lipgloss.Style
+		prefix     string
 	)
 
 	if index == m.Index() {
 		prefix = "> "
 		titleStyle = lipgloss.NewStyle().Bold(true)
-		descStyle = lipgloss.NewStyle()
 	} else {
 		prefix = "  "
 		titleStyle = lipgloss.NewStyle()
-		descStyle = lipgloss.NewStyle()
 	}
 
-	s := titleStyle.Render(prefix + ci.Subject)
-	if ci.Body != "" {
-		s += "\n" + descStyle.Render("    "+ci.Body)
-	}
-	_, _ = fmt.Fprint(w, s)
+	_, _ = fmt.Fprint(w, titleStyle.Render(prefix+ci.Subject))
 }
 
 func (d commitItemDelegate) Height() int {
-	return 3
+	return 1
 }
 
 func (d commitItemDelegate) Spacing() int {

@@ -594,3 +594,41 @@ func TestAllStepsDoneWithoutErrorGoesToResult(t *testing.T) {
 		t.Errorf("state = %v, want stateResult when no failures", updated.(Model).state)
 	}
 }
+
+func TestMultiMessageSetsListHeight(t *testing.T) {
+	m := NewModel(3, false)
+	msg := SetMessages([]CommitItem{
+		{Subject: "feat: a", Body: ""},
+		{Subject: "feat: b", Body: ""},
+	})
+	updated, _ := m.Update(msg)
+	if updated.(Model).list.Height() != 2 {
+		t.Errorf("list height = %d, want 2", updated.(Model).list.Height())
+	}
+}
+
+func TestEnterInResultStateSetsStateDone(t *testing.T) {
+	m := NewModel(3, false)
+	msg := SetMessages([]CommitItem{
+		{Subject: "feat: a", Body: ""},
+		{Subject: "feat: b", Body: ""},
+	})
+	updated, _ := m.Update(msg)
+
+	selectMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	updated2, cmd := updated.(Model).Update(selectMsg)
+
+	if updated2.(Model).state != stateDone {
+		t.Errorf("state = %v, want stateDone after Enter in stateResult", updated2.(Model).state)
+	}
+	if cmd == nil {
+		t.Error("should return tea.Quit after Enter selection")
+	}
+}
+
+func TestCommitItemDelegateHeightIsOne(t *testing.T) {
+	d := newCommitDelegate()
+	if d.Height() != 1 {
+		t.Errorf("delegate height = %d, want 1", d.Height())
+	}
+}

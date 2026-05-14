@@ -14,7 +14,7 @@ design-interrogation skipped - scope: cli-only, UX paths exhaustively covered by
 |---------|------|---------|
 | `gen-commit-msg` | CLI command | Single entry point, no subcommands |
 | TUI: spinner | bubbletea view | "Generating commit messages..." with animated spinner |
-| TUI: result list | bubbletea view | Interactive scrollable list of commit message variants |
+| TUI: result list | bubbletea view (inline, no alt screen) | Inline scrollable list of commit message subjects (one per line); no status bar or key binding help. Height matches item count exactly. |
 | TUI: pause overlay | bubbletea view | "Press any key to exit..." on error/exit |
 | stdout | text output | Final result: commit message, `--version`, `--help` |
 | stderr | text output | Error messages, log output |
@@ -31,9 +31,9 @@ design-interrogation skipped - scope: cli-only, UX paths exhaustively covered by
 4. TUI displays spinner: `Generating commit messages...` with animated indicator
 5. Tool creates session, sends prompt to opencode
 6. Spinner continues while opencode generates responses
-7. TUI transitions to result list: commit message variants with subject (first line) visible
-8. User navigates with Up/Down arrows; selected item highlighted (`>` prefix, inverted colors)
-9. User presses Enter to select
+7. TUI transitions to result list: commit message subjects (one per line, no body in list)
+8. User navigates with Up/Down arrows; selected item highlighted (`>` prefix + bold)
+9. User presses Enter to select; list clears from screen
 10. Selected commit message prints to stdout
 11. Tool deletes session, stops opencode server
 12. If `--pause on` or `--pause on-error` with error: overlay `Press any key to exit...`
@@ -108,7 +108,7 @@ Failure paths:
 |---------|-------|---------|-------|---------|---------|
 | CLI entry (no server/TUI) | No staged files: silent exit 0 | N/A — loading triggers TUI | Error on stderr, exit 1 | N/A | Version/help: text on stdout, exit 0 |
 | TUI: spinner | N/A — only shown during loading | `Generating commit messages...` ⠋ | `Error: <msg>` shown, pause overlay if configured | `Error: opencode server failed to start (no response after 30s)` | Transition to result list |
-| TUI: result list | N/A — would be error state (no results) | N/A — loading shown by spinner | `Error: <msg>` | N/A | List of variants with `>` selection cursor |
+| TUI: result list | N/A — would be error state (no results) | N/A — loading shown by spinner | `Error: <msg>` | N/A | List of subject line variants with `>` selection cursor; no status bar or key binding help; one line per item |
 | TUI: pause overlay | N/A | N/A | `Press any key to exit...` | N/A | `Press any key to exit...` (if `--pause on`) |
 | stdout | N/A — empty success exits silently | N/A | N/A | N/A | Commit message text, no framing |
 | stderr | N/A | N/A | `Error: <message>` | `Error: <message>` | N/A (or log output if configured) |
@@ -130,7 +130,7 @@ Three reference strings:
 
 ## Output accessibility
 
-- **Color independence**: spinner and TUI use only text characters. List selection indicated by `>` prefix and terminal inversion, not color alone. TUI rendering goes to stderr; stdout output is plain text.
+- **Color independence**: spinner and TUI use only text characters. List selection indicated by `>` prefix and bold, not color alone. TUI rendering goes to `/dev/tty`; stdout output is plain text.
 - **Screen-reader friendly**: error messages prefixed with `Error: `; all output is plain text. No ANSI escape sequences in stdout or stderr output (both can be safely piped). TUI escape sequences go to `/dev/tty`.
 - **Terminal width**: TUI adapts to terminal width. Commit message subject line wraps at terminal edge. Minimum 40 columns; below that the list truncates with `...`.
 - **Motion**: spinner uses standard character cycling (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`). No flashing or rapid animation.

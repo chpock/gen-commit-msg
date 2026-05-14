@@ -85,7 +85,7 @@ Each step failure must display a step-specific error message below the step list
 The `<detail>` portion is the underlying error text from the operation.
 
 ## Transitions
-- After the last step (step 5) reaches Done, the TUI waits 300ms then auto-advances to the message selection view.
+- After all steps reach their final status, the goroutine sends `SetMessages` (always, even for zero messages) followed by `AllStepsDone`. The TUI auto-advances to the message selection view (or auto-selects for single message).
 - If the message count is 1, the TUI auto-selects and exits without rendering the selection view.
 - If the message count is 0, the TUI transitions to the error view ("no commit messages generated").
 
@@ -130,8 +130,8 @@ If step 2 succeeds but step 3 or 4 fails: show ⚠ (warning) on the failed step 
   Step 2: ✓ Generating commit messages...
   Step 3: ✓ Deleting session...
   Step 4: ✓ Stopping OpenCode server...
-       ↓ (after AllStepsDone — auto-transition)
-[Message Selection TUI (existing)]
+       ↓ (after SetMessages — auto-transition; list is inline, one line per item, no status bar)
+[Message Selection TUI (inline, subjects only)]
 
 Failure example (step 1 fails, step 4 cleanup succeeds):
   Step 0: ✓ Starting OpenCode...

@@ -20,7 +20,7 @@ Design-interrogation pass complete - round 1 - 2026-05-12
 
 ## Surfaces enumerated
 - **Progress view**: Vertical list of 5 steps with status indicators (pending/running/done/failed) + inline error display. Shown immediately when TUI starts, before message selection. All errors (step failures, zero messages) are shown inline on this surface.
-- **Message selection view**: Existing list of commit message subjects with ↑↓ navigation and Enter to select.
+- **Message selection view**: Inline list of commit message subjects (one per line, body not shown). No alt screen, no status bar, no key binding help. Height equals item count. ↑↓ navigation and Enter to select. After selection, list clears from screen and result prints to stdout.
 
 ## User flows
 
@@ -28,8 +28,8 @@ Design-interrogation pass complete - round 1 - 2026-05-12
 1. User runs `gen-commit-msg` with staged files
 2. Progress view appears — all 5 steps listed, all pending
 3. Steps 1→5 complete in order: pending → running (spinner) → done (✓)
-4. After step 5 completes, auto-transition to message selection view
-5. User navigates with ↑↓, selects with Enter → message printed to stdout → program exits
+4. After step 5 completes, progress view clears and auto-transitions to inline message selection view (no alt screen, no status bar, one line per item, height matches item count)
+5. User navigates with ↑↓, selects with Enter → list clears from screen, message printed to stdout → program exits
 6. (Single message: auto-selected, skips selection view)
 7. (Zero messages: inline error on progress view — steps 1-5 ✓, error text below)
 
@@ -63,7 +63,7 @@ Design-interrogation pass complete - round 1 - 2026-05-12
 | Surface | Loading | Error | Success | Empty |
 |---------|---------|-------|---------|-------|
 | Progress view | All 5 steps shown; current step shows spinner; completed steps show ✓; pending steps dimmed | Failed step ✗ + error detail below list; dependent steps show `-` (skipped); cleanup steps show their real outcome (✓ / ⚠ / ✗); after `allStepsDoneMsg` transitions to error view; dismiss with Enter/Ctrl+C | All steps ✓; auto-transition to message selection after 300ms; cleanup warnings (⚠) show inline but still auto-transition | Steps all ✓; inline error "no commit messages generated" below list; same dismiss behavior |
-| Message selection | N/A — preceded by progress view | N/A — all errors handled inline on progress view | List of messages; ↑↓ to navigate; Enter to select; selected message printed to stdout | N/A — zero messages handled on progress view |
+| Message selection | N/A — preceded by progress view | N/A — all errors handled inline on progress view | List of subject line variants (one per line, no body, no status bar); ↑↓ to navigate; Enter to select; list clears before result prints to stdout | N/A — zero messages handled on progress view |
 
 Permission-denied, Offline: N/A — local CLI tool, no network auth required.
 

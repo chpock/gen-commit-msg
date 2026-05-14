@@ -22,6 +22,7 @@ const (
 	stateSpinner
 	stateResult
 	stateError
+	stateDone
 )
 
 type StepStatus int
@@ -189,6 +190,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case 1:
 			m.selected = formatMessage(m.messages[0])
+			m.state = stateDone
 			return m, tea.Quit
 		default:
 			items := make([]list.Item, len(m.messages))
@@ -319,6 +321,8 @@ func (m Model) View() string {
 	case stateResult:
 		return m.list.View()
 	case stateError:
+		return ""
+	case stateDone:
 		return ""
 	}
 	return ""

@@ -73,7 +73,12 @@ func ParseFlags() (*Config, error) {
 		return nil, fmt.Errorf("subject-max must not exceed 20, got %d", cfg.SubjectMax)
 	}
 	if cfg.SubjectMax < cfg.SubjectMin {
-		return nil, fmt.Errorf("subject-max (%d) must be >= subject-min (%d)", cfg.SubjectMax, cfg.SubjectMin)
+		maxSetExplicitly := flags.Changed("subject-max") || os.Getenv("GCM_SUBJECT_MAX") != ""
+		if !maxSetExplicitly {
+			cfg.SubjectMax = cfg.SubjectMin
+		} else {
+			return nil, fmt.Errorf("subject-max (%d) must be >= subject-min (%d)", cfg.SubjectMax, cfg.SubjectMin)
+		}
 	}
 
 	return cfg, nil

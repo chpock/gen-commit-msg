@@ -148,6 +148,20 @@ func TestParseFlagsValidationSubjectMaxLessThanMin(t *testing.T) {
 	}
 }
 
+func TestParseFlagsSubjectMinOnlyExceedsDefaultMax(t *testing.T) {
+	os.Args = []string{"gen-commit-msg", "--subject-min", "10"}
+	cfg, err := ParseFlags()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.SubjectMin != 10 {
+		t.Errorf("SubjectMin = %d, want 10", cfg.SubjectMin)
+	}
+	if cfg.SubjectMax != 10 {
+		t.Errorf("SubjectMax = %d, want 10 (auto-adjusted from default 5)", cfg.SubjectMax)
+	}
+}
+
 func TestParseFlagsValidationSubjectMaxGreaterThan20(t *testing.T) {
 	os.Args = []string{"gen-commit-msg", "--subject-max", "21"}
 	_, err := ParseFlags()

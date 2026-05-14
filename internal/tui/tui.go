@@ -147,7 +147,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		switch msg.Type {
-		case tea.KeyCtrlC, tea.KeyEsc:
+		case tea.KeyCtrlC:
+			slog.Info("received SIGINT, initiating graceful shutdown")
+			m.quitting = true
+			return m, tea.Quit
+		case tea.KeyEsc:
 			m.quitting = true
 			return m, tea.Quit
 		}

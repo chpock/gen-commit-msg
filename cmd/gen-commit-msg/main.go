@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -109,7 +110,7 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		sig := <-sigCh
-		slog.Debug("signal received", "signal", sig)
+		slog.Info("received signal, initiating shutdown", "signal", sig.String())
 		cancel()
 	}()
 
@@ -117,9 +118,13 @@ func main() {
 		m := tui.NewModel(int(cfg.SubjectMax), cfg.Quiet)
 		tty, closeTTY := openTTY()
 		defer closeTTY()
-		p := tea.NewProgram(m, tea.WithOutput(tty))
+		p := tea.NewProgram(m, tea.WithOutput(tty), tea.WithContext(ctx))
+
+		var wg sync.WaitGroup
+		wg.Add(1)
 
 		go func() {
+			defer wg.Done()
 			var srv *server.ProcessServer
 			var oc *opencode.Client
 			var sessionID string
@@ -177,14 +182,17 @@ func main() {
 				var createErr error
 				sessionID, createErr = oc.CreateSession(ctx, cfg.Agent)
 				if createErr != nil {
-					slog.Error("failed to create session", "agent", cfg.Agent, "error", createErr)
+					if errors.Is(createErr, context.Canceled) {
+						slog.Debug("session creation cancelled", "agent", cfg.Agent)
+					} else {
+						slog.Error("failed to create session", "agent", cfg.Agent, "error", createErr)
+					}
 					var createAppErr *opencode.AppError
 					if !errors.As(createErr, &createAppErr) {
 						createAppErr = &opencode.AppError{Op: "create_session", Message: createErr.Error(), Err: createErr}
 					}
 					p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepFailed, Detail: "Failed to create session", Err: createAppErr})
 				} else {
-					slog.Info("session created", "id", sessionID, "agent", cfg.Agent)
 					p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepDone})
 				}
 			}
@@ -203,7 +211,11 @@ func main() {
 				var genErr error
 				messages, genErr = oc.GenerateMessages(ctx, sessionID, genParams)
 				if genErr != nil {
-					slog.Error("failed to generate messages", "error", genErr)
+					if errors.Is(genErr, context.Canceled) {
+						slog.Debug("message generation cancelled")
+					} else {
+						slog.Error("failed to generate messages", "error", genErr)
+					}
 					var genAppErr *opencode.AppError
 					if !errors.As(genErr, &genAppErr) {
 						genAppErr = &opencode.AppError{Op: "generate_messages", Message: genErr.Error(), Err: genErr}
@@ -247,6 +259,10 @@ func main() {
 
 			cleanupDone = true
 
+			if ctx.Err() != nil {
+				return
+			}
+
 			time.Sleep(300 * time.Millisecond)
 
 			if len(messages) > 0 {
@@ -261,6 +277,10 @@ func main() {
 		}()
 
 		finalModel, err := p.Run()
+		cancel()
+		slog.Info("initiating graceful shutdown")
+		wg.Wait()
+		slog.Info("graceful shutdown complete")
 		if err != nil {
 			slog.Error("TUI initialization failed", "error", err)
 			fmtError("Error: TUI initialization failed: %v\n", err)
@@ -318,13 +338,15 @@ func main() {
 	}
 	defer cleanup()
 	if err != nil {
-		slog.Error("failed to create session", "agent", cfg.Agent, "error", err)
+		if errors.Is(err, context.Canceled) {
+			slog.Debug("session creation cancelled", "agent", cfg.Agent)
+		} else {
+			slog.Error("failed to create session", "agent", cfg.Agent, "error", err)
+		}
 		fmt.Fprintln(os.Stderr, formatOpenCodeError(err))
 		cleanup()
 		pauseExit(1, true)
 	}
-	slog.Info("session created", "id", sessionID, "agent", cfg.Agent)
-
 	genParams := opencode.GenerateParams{
 		SubjectMin: int(cfg.SubjectMin),
 		SubjectMax: int(cfg.SubjectMax),
@@ -335,7 +357,11 @@ func main() {
 		slog.Debug("non-interactive mode", "subject_min", cfg.SubjectMin, "subject_max", cfg.SubjectMax)
 		messages, err := oc.GenerateMessages(ctx, sessionID, genParams)
 		if err != nil {
-			slog.Error("failed to generate messages", "error", err)
+			if errors.Is(err, context.Canceled) {
+				slog.Debug("message generation cancelled")
+			} else {
+				slog.Error("failed to generate messages", "error", err)
+			}
 			fmt.Fprintln(os.Stderr, formatOpenCodeError(err))
 			cleanup()
 			pauseExit(1, true)

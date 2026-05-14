@@ -35,6 +35,15 @@ func ParseLevel(level string) slog.Level {
 func newHandler(w io.Writer, level slog.Level) slog.Handler {
 	return slog.NewTextHandler(w, &slog.HandlerOptions{
 		Level: level,
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.LevelKey {
+				val := a.Value.Any().(slog.Level)
+				if val == LevelTrace {
+					a.Value = slog.StringValue("TRACE")
+				}
+			}
+			return a
+		},
 	})
 }
 

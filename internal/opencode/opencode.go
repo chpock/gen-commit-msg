@@ -69,7 +69,7 @@ func newClientWithSession(s sessionClient, repoDir, agent string) *Client {
 }
 
 func (c *Client) CreateSession(ctx context.Context, agentName string) (string, error) {
-	slog.Debug("creating session", "agent", agentName, "dir", c.repoDir)
+	slog.Info("creating session", "agent", agentName, "dir", c.repoDir)
 
 	params := opencode.SessionNewParams{
 		Directory: opencode.F(c.repoDir),
@@ -84,7 +84,11 @@ func (c *Client) CreateSession(ctx context.Context, agentName string) (string, e
 
 	session, err := c.session.New(ctx, params)
 	if err != nil {
-		slog.Error("failed to create session", "agent", agentName, "error", err)
+		if errors.Is(err, context.Canceled) {
+			slog.Debug("session creation cancelled", "agent", agentName)
+		} else {
+			slog.Error("failed to create session", "agent", agentName, "error", err)
+		}
 		return "", &AppError{
 			Op:      "create_session",
 			Message: "failed to create OpenCode session",
@@ -99,7 +103,7 @@ func (c *Client) CreateSession(ctx context.Context, agentName string) (string, e
 			slog.String("response", string(sessionJSON)))
 	}
 
-	slog.Debug("session created", "id", session.ID, "agent", agentName)
+	slog.Info("session created", "id", session.ID, "agent", agentName)
 	return session.ID, nil
 }
 
@@ -186,7 +190,11 @@ func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params 
 		option.WithJSONSet("format", format),
 	)
 	if err != nil {
-		slog.Error("prompt failed", "session_id", sessionID, "error", err)
+		if errors.Is(err, context.Canceled) {
+			slog.Debug("prompt cancelled", "session_id", sessionID)
+		} else {
+			slog.Error("prompt failed", "session_id", sessionID, "error", err)
+		}
 		return nil, &AppError{
 			Op:      "generate_messages",
 			Message: "OpenCode prompt request failed",
@@ -261,7 +269,7 @@ func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params 
 }
 
 func (c *Client) DeleteSession(ctx context.Context, sessionID string) error {
-	slog.Debug("deleting session", "session_id", sessionID)
+	slog.Info("deleting session", "session_id", sessionID)
 
 	if slog.Default().Enabled(ctx, logging.LevelTrace) {
 		slog.LogAttrs(ctx, logging.LevelTrace, "opencode request: session delete",

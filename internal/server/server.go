@@ -171,7 +171,7 @@ func checkListen(baseURL string) error {
 }
 
 func (s *ProcessServer) Stop() error {
-	slog.Debug("stopping opencode server")
+	slog.Info("stopping opencode server")
 	if s.cancel != nil {
 		s.cancel()
 	}
@@ -181,7 +181,7 @@ func (s *ProcessServer) Stop() error {
 		go func() { done <- s.cmd.Wait() }()
 		select {
 		case <-done:
-			slog.Debug("opencode process exited cleanly")
+			slog.Info("opencode process exited cleanly")
 		case <-time.After(5 * time.Second):
 			slog.Warn("opencode server did not stop gracefully, killing")
 			_ = s.cmd.Process.Kill()

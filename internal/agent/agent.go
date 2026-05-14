@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-//go:embed prompt.md
+//go:embed gen-commit-msg.md
 var DefaultPrompt string
 
 func agentsDir() string {

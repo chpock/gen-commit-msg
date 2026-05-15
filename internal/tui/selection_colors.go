@@ -126,18 +126,19 @@ func conventionalPrefixEnd(subject string) (int, bool) {
 }
 
 func renderSelectedSubject(subject string, enableColors bool) string {
-	prefixEnd, ok := conventionalPrefixEnd(subject)
-	if !enableColors || !ok {
+	if !enableColors {
 		return subject
 	}
-	punctGray := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	punctRed := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	selected := lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+
+	prefixEnd, ok := conventionalPrefixEnd(subject)
+	if !ok {
+		return "\x1b[96m" + subject + "\x1b[0m"
+	}
 
 	r := subject[:prefixEnd]
-	r = strings.ReplaceAll(r, "!", punctRed.Render("!"))
-	r = strings.ReplaceAll(r, "(", punctGray.Render("("))
-	r = strings.ReplaceAll(r, ")", punctGray.Render(")"))
-	r = strings.ReplaceAll(r, ":", punctGray.Render(":"))
-	return selected.Render(r + subject[prefixEnd:])
+	r = strings.ReplaceAll(r, "!", "\x1b[91m!\x1b[96m")
+	r = strings.ReplaceAll(r, "(", "\x1b[90m(\x1b[96m")
+	r = strings.ReplaceAll(r, ")", "\x1b[90m)\x1b[96m")
+	r = strings.ReplaceAll(r, ":", "\x1b[90m:\x1b[96m")
+	return "\x1b[96m" + r + subject[prefixEnd:] + "\x1b[0m"
 }

@@ -120,6 +120,23 @@ func TestRenderSelectedSubjectFallbackPlainText(t *testing.T) {
 	}
 }
 
+func TestRenderSelectedSubjectNonConventional(t *testing.T) {
+	subject := "update the parser logic"
+	out := renderSelectedSubject(subject, true)
+
+	if !strings.HasPrefix(out, "\x1b[96m") {
+		t.Fatal("expected non-conventional selected subject to be wrapped in ANSI 14 (96)")
+	}
+
+	if !strings.HasSuffix(out, "\x1b[0m") {
+		t.Fatal("expected ANSI reset at end")
+	}
+
+	if !strings.Contains(out, subject) {
+		t.Fatal("expected subject text to be present in output")
+	}
+}
+
 func TestLogSelectionColorDecisionFields(t *testing.T) {
 	t.Run("info record includes required mode fields", func(t *testing.T) {
 		h := &captureHandler{}

@@ -563,8 +563,10 @@ Evidence mapping:
   `TestLogSelectionColorDecisionFields`.
 
 **Reconciliation (Task 5 Step 5)**
-- No divergence found between implementation and approved UX artifact.
-- No production file changes required for Task 5.
+- Divergences found: D1 (non-conventional selected subjects missing ANSI 14 wrap) and
+  D2 (punctuation token SGR reset breaking outer ANSI 14 wrap). Fixed in
+  design-review fix pass below.
+- No remaining divergence between implementation and approved UX artifact after fixes.
 
 **Files changed**
 - None.
@@ -573,4 +575,26 @@ Evidence mapping:
 - None.
 
 **Deviations**
-- None.
+- D1: `renderSelectedSubject` returned plain text for non-conventional subjects when
+  `enableColors` is true; UX spec requires ANSI 14 wrapping for all selected
+  subjects.
+- D2: Punctuation tokens rendered via lipgloss styles emitted `\x1b[0m` (SGR reset)
+  breaking outer ANSI 14 wrap, causing text after first punctuation token to render
+  in terminal default color.
+
+### Design-review fix pass
+
+**Files changed**
+- `internal/tui/selection_colors.go`
+- `internal/tui/selection_colors_test.go`
+- `docs/leyline/plans/2026-05-15-selection-list-colors-review-log.md`
+
+**Fix summary**
+- D1: When `enableColors` is true and subject does not match conventional prefix,
+  wrap entire subject in `\x1b[96m`...`\x1b[0m` instead of returning plain text.
+- D2: Replaced lipgloss-style punctuation rendering (which emits SGR reset) with
+  raw SGR inline transitions (`\x1b[90m`/`\x1b[91m` → `\x1b[96m`), then wrap
+  final concatenated result in `\x1b[96m`...`\x1b[0m`. This preserves the outer
+  ANSI 14 wrap through all punctuation tokens.
+- D4: Added `TestRenderSelectedSubjectNonConventional` verifying ANSI 14 prefix,
+  ANSI reset suffix, and subject text presence for non-conventional subjects.

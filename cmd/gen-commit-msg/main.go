@@ -213,6 +213,7 @@ func main() {
 
 			// Step 2: Generating commit messages (depends on step 1).
 			sessionOK := step0OK && sessionID != ""
+			var genErr error
 			if !sessionOK {
 				p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepSkipped})
 			} else {
@@ -280,11 +281,13 @@ func main() {
 
 			time.Sleep(300 * time.Millisecond)
 
-			items := make([]tui.CommitItem, len(messages))
-			for i, msg := range messages {
-				items[i] = tui.CommitItem{Subject: msg.Subject, Body: msg.Body}
+			if genErr == nil && len(messages) > 0 {
+				items := make([]tui.CommitItem, len(messages))
+				for i, msg := range messages {
+					items[i] = tui.CommitItem{Subject: msg.Subject, Body: msg.Body}
+				}
+				p.Send(tui.SetMessages(items))
 			}
-			p.Send(tui.SetMessages(items))
 
 			p.Send(tui.AllStepsDone())
 		}()
@@ -306,7 +309,8 @@ func main() {
 			slog.Error("TUI ended with error", "error", m.Error())
 			closeTTY()
 			fmt.Fprint(os.Stderr, m.RenderError())
-			if isTTY {
+			shouldPause := cfg.Pause == "on" || cfg.Pause == "on-error"
+			if isTTY && shouldPause {
 				pauseWithEnter(isTTY, "")
 			}
 			fmt.Fprintln(os.Stderr)
@@ -400,28 +404,32 @@ func main() {
 			cleanup()
 			pauseExit(1, true)
 		}
-		if len(messages) > 0 {
-			writer, closeWriter := resolveOutputWriter(cfg.Output)
-			if writer == nil {
-				slog.Error("failed to open output file", "path", cfg.Output)
-				fmtError("Error: failed to open output file %q: %v\n", cfg.Output, closeWriter())
-				cleanup()
-				pauseExit(1, true)
-			}
-			_, err := fmt.Fprintln(writer, formatMessageFromOC(messages[0]))
-			if err != nil {
-				slog.Error("failed to write output file", "path", cfg.Output, "error", err)
-				fmtError("Error: failed to write output file %q: %v\n", cfg.Output, err)
-				_ = closeWriter()
-				cleanup()
-				pauseExit(1, true)
-			}
-			if err := closeWriter(); err != nil {
-				slog.Error("failed to close output file", "path", cfg.Output, "error", err)
-				fmtError("Error: failed to write output file %q: %v\n", cfg.Output, err)
-				cleanup()
-				pauseExit(1, true)
-			}
+		if len(messages) == 0 {
+			slog.Error("no commit messages generated")
+			fmtError("Error: no commit messages generated\n")
+			cleanup()
+			pauseExit(1, true)
+		}
+		writer, closeWriter := resolveOutputWriter(cfg.Output)
+		if writer == nil {
+			slog.Error("failed to open output file", "path", cfg.Output)
+			fmtError("Error: failed to open output file %q: %v\n", cfg.Output, closeWriter())
+			cleanup()
+			pauseExit(1, true)
+		}
+		_, err = fmt.Fprintln(writer, formatMessageFromOC(messages[0]))
+		if err != nil {
+			slog.Error("failed to write output file", "path", cfg.Output, "error", err)
+			fmtError("Error: failed to write output file %q: %v\n", cfg.Output, err)
+			_ = closeWriter()
+			cleanup()
+			pauseExit(1, true)
+		}
+		if err := closeWriter(); err != nil {
+			slog.Error("failed to close output file", "path", cfg.Output, "error", err)
+			fmtError("Error: failed to write output file %q: %v\n", cfg.Output, err)
+			cleanup()
+			pauseExit(1, true)
 		}
 		pauseExit(0, false)
 	}

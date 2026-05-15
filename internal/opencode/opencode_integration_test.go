@@ -316,6 +316,32 @@ func TestClient_GenerateMessages_NullStructured(t *testing.T) {
 	}
 }
 
+func TestClient_GenerateMessages_EmptySubjects(t *testing.T) {
+	mock := newMockSession().WithPromptFixture("prompt_error_empty_subjects.json")
+	client := newClientWithSession(mock, "/tmp/repo", "test-agent")
+
+	_, err := client.GenerateMessages(context.Background(), "sess_001", GenerateParams{
+		SubjectMin: 1,
+		SubjectMax: 1,
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	var appErr *AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("expected *AppError, got %T: %v", err, err)
+	}
+	if appErr.OC == nil {
+		t.Fatal("expected OC field")
+	}
+	if appErr.OC.Kind != OCErrNoSubjects {
+		t.Errorf("expected Kind=OCErrNoSubjects, got %v", appErr.OC.Kind)
+	}
+	if appErr.Op != "generate_messages" {
+		t.Errorf("expected op 'generate_messages', got %q", appErr.Op)
+	}
+}
+
 func TestClient_GenerateMessages_TransportError(t *testing.T) {
 	mock := newMockSession().WithPromptError()
 	client := newClientWithSession(mock, "/tmp/repo", "test-agent")

@@ -59,6 +59,7 @@ const (
 	OCErrAPI                OCErrorKind = "api_error"
 	OCErrHTTP               OCErrorKind = "http_error"
 	OCErrNoStructuredOutput OCErrorKind = "no_structured_output"
+	OCErrNoSubjects         OCErrorKind = "no_subjects"
 )
 
 type OCError struct {

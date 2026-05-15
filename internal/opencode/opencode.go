@@ -264,6 +264,22 @@ func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params 
 		messages[i] = CommitMessage{Subject: subject, Body: result.Body}
 	}
 
+	if len(messages) == 0 {
+		slog.Error("no subjects in structured output", "session_id", sessionID)
+		return nil, &AppError{
+			Op:      "generate_messages",
+			Message: "OpenCode returned no commit message subjects",
+			OC: &OCError{
+				Kind:        OCErrNoSubjects,
+				RequestType: "prompt",
+				SessionID:   sessionID,
+				Agent:       c.agent,
+				Code:        "empty_subjects",
+				Message:     "the structured output contained an empty subjects array",
+			},
+		}
+	}
+
 	slog.Info("messages generated", "session_id", sessionID, "count", len(messages), "has_body", result.Body != "")
 	slog.Debug("subjects", "session_id", sessionID, "subjects", result.Subjects)
 	slog.Debug("body", "session_id", sessionID, "body", result.Body)

@@ -400,7 +400,14 @@ func main() {
 				cleanup()
 				pauseExit(1, true)
 			}
-			fmt.Fprintln(writer, formatMessageFromOC(messages[0]))
+			_, err := fmt.Fprintln(writer, formatMessageFromOC(messages[0]))
+			if err != nil {
+				slog.Error("failed to write output file", "path", cfg.Output, "error", err)
+				fmtError("Error: failed to write output file %q: %v\n", cfg.Output, err)
+				_ = closeWriter()
+				cleanup()
+				pauseExit(1, true)
+			}
 			if err := closeWriter(); err != nil {
 				slog.Error("failed to close output file", "path", cfg.Output, "error", err)
 				fmtError("Error: failed to write output file %q: %v\n", cfg.Output, err)

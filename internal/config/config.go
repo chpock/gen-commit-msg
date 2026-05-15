@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	flag "github.com/spf13/pflag"
@@ -19,6 +20,7 @@ type Config struct {
 	LogFile      string
 	Pause        string
 	InstallAgent string
+	Output       string
 	Version      bool
 	Help         bool
 }
@@ -34,6 +36,7 @@ func initFlags() *flag.FlagSet {
 	flags.String("log-file", "", "log output file (default: stderr)")
 	flags.String("pause", "on-error", "pause before exit: on, off, on-error")
 	flags.String("install-agent", "if-not-exists", "agent install behavior: always, if-not-exists, no")
+	flags.StringP("output", "o", "", "write commit message to file instead of stdout")
 	flags.BoolP("version", "V", false, "print version and exit")
 	flags.BoolP("help", "h", false, "print help and exit")
 	return flags
@@ -65,6 +68,7 @@ func ParseFlags() (*Config, error) {
 	cfg.LogFile = getStringFlagOrEnv(flags, "log-file", "GCM_LOG_FILE", "")
 	cfg.Pause = getStringFlagOrEnv(flags, "pause", "GCM_PAUSE", "on-error")
 	cfg.InstallAgent = getStringFlagOrEnv(flags, "install-agent", "GCM_INSTALL_AGENT", "if-not-exists")
+	cfg.Output = getStringFlagOrEnv(flags, "output", "GCM_OUTPUT", "")
 
 	if cfg.SubjectMin < 1 {
 		return nil, fmt.Errorf("subject-min must be at least 1, got %d", cfg.SubjectMin)
@@ -146,4 +150,28 @@ func getUintFlagOrEnv(flags *flag.FlagSet, name, envVar string, defaultVal uint)
 	}
 	slog.Debug("config resolved from env", "name", name, "env", envVar, "value", n)
 	return uint(n)
+}
+
+func (c *Config) ValidateOutputPath() error {
+	if c.Output == "" {
+		return nil
+	}
+	dir := filepath.Dir(c.Output)
+	info, err := os.Stat(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("failed to open output file %q: no such file or directory", c.Output)
+		}
+		return fmt.Errorf("failed to open output file %q: %w", c.Output, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("failed to open output file %q: not a directory", c.Output)
+	}
+	f, err := os.OpenFile(c.Output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open output file %q: %w", c.Output, err)
+	}
+	_ = f.Close()
+	_ = os.Remove(c.Output)
+	return nil
 }

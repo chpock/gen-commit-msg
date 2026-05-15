@@ -173,6 +173,101 @@ func TestParseFlagsValidationSubjectMaxGreaterThan20(t *testing.T) {
 	}
 }
 
+func TestParseFlagsOutputFlag(t *testing.T) {
+	os.Args = []string{"gen-commit-msg", "--output", "/tmp/test-msg.txt"}
+	cfg, err := ParseFlags()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Output != "/tmp/test-msg.txt" {
+		t.Errorf("Output = %q, want /tmp/test-msg.txt", cfg.Output)
+	}
+}
+
+func TestParseFlagsOutputEnvVar(t *testing.T) {
+	os.Args = []string{"gen-commit-msg"}
+	_ = os.Setenv("GCM_OUTPUT", "/tmp/env-msg.txt")
+	t.Cleanup(func() { _ = os.Unsetenv("GCM_OUTPUT") })
+
+	cfg, err := ParseFlags()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Output != "/tmp/env-msg.txt" {
+		t.Errorf("Output = %q, want /tmp/env-msg.txt", cfg.Output)
+	}
+}
+
+func TestParseFlagsOutputDefault(t *testing.T) {
+	os.Args = []string{"gen-commit-msg"}
+	t.Setenv("GCM_OUTPUT", "")
+	cfg, err := ParseFlags()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Output != "" {
+		t.Errorf("Output = %q, want empty string (default)", cfg.Output)
+	}
+}
+
+func TestParseFlagsOutputShortFlag(t *testing.T) {
+	os.Args = []string{"gen-commit-msg", "-o", "/tmp/short-msg.txt"}
+	cfg, err := ParseFlags()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Output != "/tmp/short-msg.txt" {
+		t.Errorf("Output = %q, want /tmp/short-msg.txt", cfg.Output)
+	}
+}
+
+func TestParseFlagsOutputCLIOverridesEnv(t *testing.T) {
+	os.Args = []string{"gen-commit-msg", "--output", "/tmp/cli-msg.txt"}
+	_ = os.Setenv("GCM_OUTPUT", "/tmp/env-msg.txt")
+	t.Cleanup(func() { _ = os.Unsetenv("GCM_OUTPUT") })
+
+	cfg, err := ParseFlags()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Output != "/tmp/cli-msg.txt" {
+		t.Errorf("Output = %q, want /tmp/cli-msg.txt (CLI overrides env)", cfg.Output)
+	}
+}
+
+func TestValidateOutputPathEmpty(t *testing.T) {
+	cfg := &Config{Output: ""}
+	if err := cfg.ValidateOutputPath(); err != nil {
+		t.Errorf("expected nil error for empty output path, got: %v", err)
+	}
+}
+
+func TestValidateOutputPathWritableFile(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/commit-msg.txt"
+	cfg := &Config{Output: path}
+	if err := cfg.ValidateOutputPath(); err != nil {
+		t.Errorf("expected nil error for writable path, got: %v", err)
+	}
+}
+
+func TestValidateOutputPathNonExistentParent(t *testing.T) {
+	cfg := &Config{Output: "/nonexistent-dir-xyz/commit-msg.txt"}
+	err := cfg.ValidateOutputPath()
+	if err == nil {
+		t.Fatal("expected error for non-existent parent directory")
+	}
+}
+
+func TestValidateOutputPathIsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &Config{Output: dir}
+	err := cfg.ValidateOutputPath()
+	if err == nil {
+		t.Fatal("expected error when output path is a directory")
+	}
+}
+
 func TestParseFlagsValidationSubjectMinMaxEqual(t *testing.T) {
 	os.Args = []string{"gen-commit-msg", "--subject-min", "3", "--subject-max", "3"}
 	cfg, err := ParseFlags()

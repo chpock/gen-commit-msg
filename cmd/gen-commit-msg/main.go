@@ -46,7 +46,8 @@ func main() {
 	slog.Debug("gen-commit-msg starting", "version", version,
 		"subject_min", cfg.SubjectMin, "subject_max", cfg.SubjectMax, "body", cfg.Body,
 		"quiet", cfg.Quiet, "agent", cfg.Agent, "log_level", cfg.LogLevel,
-		"log_file", cfg.LogFile, "pause", cfg.Pause, "install_agent", cfg.InstallAgent)
+		"log_file", cfg.LogFile, "pause", cfg.Pause, "install_agent", cfg.InstallAgent,
+		"output", cfg.Output)
 
 	isTTY := isTerminal()
 	slog.Debug("terminal check", "is_tty", isTTY)
@@ -61,6 +62,12 @@ func main() {
 			pauseWithEnter(isTTY, pauseMsg)
 		}
 		os.Exit(code)
+	}
+
+	if err := cfg.ValidateOutputPath(); err != nil {
+		slog.Error("output path validation failed", "error", err)
+		fmtError("Error: %v\n", err)
+		pauseExit(1, true)
 	}
 
 	if cfg.Version {
@@ -298,10 +305,22 @@ func main() {
 			os.Exit(1)
 		}
 		selected := m.SelectedMessage()
-		wrote, writeErr := writeSelectedMessage(os.Stdout, selected)
+		writer, closeWriter := resolveOutputWriter(cfg.Output)
+		if writer == nil {
+			slog.Error("failed to open output file", "path", cfg.Output)
+			fmtError("Error: failed to open output file %q: %v\n", cfg.Output, closeWriter())
+			pauseExit(1, true)
+		}
+		wrote, writeErr := writeSelectedMessage(writer, selected)
 		if writeErr != nil {
-			slog.Error("failed to write selected message", "error", writeErr)
-			fmtError("Error: failed to write selected message: %v\n", writeErr)
+			slog.Error("failed to write output file", "path", cfg.Output, "error", writeErr)
+			fmtError("Error: failed to write output file %q: %v\n", cfg.Output, writeErr)
+			_ = closeWriter()
+			pauseExit(1, true)
+		}
+		if err := closeWriter(); err != nil {
+			slog.Error("failed to close output file", "path", cfg.Output, "error", err)
+			fmtError("Error: failed to write output file %q: %v\n", cfg.Output, err)
 			pauseExit(1, true)
 		}
 		if wrote {
@@ -374,11 +393,35 @@ func main() {
 			pauseExit(1, true)
 		}
 		if len(messages) > 0 {
-			fmt.Println(formatMessageFromOC(messages[0]))
+			writer, closeWriter := resolveOutputWriter(cfg.Output)
+			if writer == nil {
+				slog.Error("failed to open output file", "path", cfg.Output)
+				fmtError("Error: failed to open output file %q: %v\n", cfg.Output, closeWriter())
+				cleanup()
+				pauseExit(1, true)
+			}
+			fmt.Fprintln(writer, formatMessageFromOC(messages[0]))
+			if err := closeWriter(); err != nil {
+				slog.Error("failed to close output file", "path", cfg.Output, "error", err)
+				fmtError("Error: failed to write output file %q: %v\n", cfg.Output, err)
+				cleanup()
+				pauseExit(1, true)
+			}
 		}
 		pauseExit(0, false)
 	}
 
+}
+
+func resolveOutputWriter(path string) (io.WriteCloser, func() error) {
+	if path == "" {
+		return os.Stdout, func() error { return nil }
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return nil, func() error { return err }
+	}
+	return f, func() error { return f.Close() }
 }
 
 func isTerminal() bool {

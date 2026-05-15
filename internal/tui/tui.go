@@ -427,28 +427,21 @@ func (d commitItemDelegate) Render(w io.Writer, m list.Model, index int, item li
 		return
 	}
 
-	var (
-		titleStyle lipgloss.Style
-		prefix     string
-	)
-
-	if index == m.Index() {
-		prefix = "> "
-		titleStyle = lipgloss.NewStyle().Bold(true)
-	} else {
-		prefix = "  "
-		titleStyle = lipgloss.NewStyle()
+	if index != m.Index() {
+		_, _ = fmt.Fprint(w, "  "+ci.Subject)
+		return
 	}
 
-	renderedSubject := ci.Subject
-	if index == m.Index() {
-		renderedSubject = renderSelectedSubject(
-			ci.Subject,
-			d.decision.mode == modeEnabled || d.decision.mode == modeEnabledInvalidEnv,
-		)
+	if d.decision.mode == modeDisabledNoColor ||
+		d.decision.mode == modeDisabledEnv ||
+		d.decision.mode == modeDisabledCapability {
+		_, _ = fmt.Fprint(w, "> "+ci.Subject)
+		return
 	}
 
-	_, _ = fmt.Fprint(w, titleStyle.Render(prefix+renderedSubject))
+	marker := lipgloss.NewStyle().Bold(true).Render("> ")
+	renderedSubject := renderSelectedSubject(ci.Subject, true)
+	_, _ = fmt.Fprint(w, marker+renderedSubject)
 }
 
 func (d commitItemDelegate) Height() int {

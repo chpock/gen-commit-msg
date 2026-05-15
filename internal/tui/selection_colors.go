@@ -132,13 +132,21 @@ func renderSelectedSubject(subject string, enableColors bool) string {
 
 	prefixEnd, ok := conventionalPrefixEnd(subject)
 	if !ok {
-		return "\x1b[96m" + subject + "\x1b[0m"
+		return "\x1b[36m" + subject + "\x1b[0m"
 	}
 
 	r := subject[:prefixEnd]
-	r = strings.ReplaceAll(r, "!", "\x1b[91m!\x1b[96m")
-	r = strings.ReplaceAll(r, "(", "\x1b[90m(\x1b[96m")
-	r = strings.ReplaceAll(r, ")", "\x1b[90m)\x1b[96m")
-	r = strings.ReplaceAll(r, ":", "\x1b[90m:\x1b[96m")
-	return "\x1b[96m" + r + subject[prefixEnd:] + "\x1b[0m"
+	r = strings.ReplaceAll(r, "!", "\x1b[91m!\x1b[36m")
+	r = strings.ReplaceAll(r, "(", "\x1b[90m(\x1b[36m")
+	r = strings.ReplaceAll(r, ")", "\x1b[90m)\x1b[36m")
+	r = strings.ReplaceAll(r, ":", "\x1b[90m:\x1b[36m")
+	return "\x1b[36m" + r + subject[prefixEnd:] + "\x1b[0m"
+}
+
+func renderHighlightedSubject(subject string) string {
+	r := subject
+	r = strings.ReplaceAll(r, "(", "\x1b[90m(\x1b[0m")
+	r = strings.ReplaceAll(r, ")", "\x1b[90m)\x1b[0m")
+	r = strings.ReplaceAll(r, ":", "\x1b[90m:\x1b[0m")
+	return r
 }

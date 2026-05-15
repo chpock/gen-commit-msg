@@ -749,8 +749,10 @@ func TestCommitDelegateSelectedAndUnselectedRendering(t *testing.T) {
 
 	var unselected bytes.Buffer
 	d.Render(&unselected, m, 0, CommitItem{Subject: "feat: one"})
-	if got := unselected.String(); got != "  feat: one" {
-		t.Fatalf("unselected row = %q, want plain %q", got, "  feat: one")
+	got := unselected.String()
+	wantUnselected := "  feat\x1b[90m:\x1b[0m one"
+	if got != wantUnselected {
+		t.Fatalf("unselected row = %q, want %q", got, wantUnselected)
 	}
 
 	var selected bytes.Buffer
@@ -759,8 +761,8 @@ func TestCommitDelegateSelectedAndUnselectedRendering(t *testing.T) {
 	if !strings.Contains(selectedRaw, "\x1b[") {
 		t.Fatalf("selected row should include ANSI styling, got %q", selectedRaw)
 	}
-	if !regexp.MustCompile(`\x1b\[[0-9;]*39m`).MatchString(selectedRaw) {
-		t.Fatalf("selected marker should include ANSI 39 foreground behavior, got %q", selectedRaw)
+	if !regexp.MustCompile(`\x1b\[[0-9;]*33m`).MatchString(selectedRaw) {
+		t.Fatalf("selected marker should include ANSI 33 foreground behavior, got %q", selectedRaw)
 	}
 	if got := stripANSI(selectedRaw); got != "> feat: two" {
 		t.Fatalf("selected row text = %q, want %q", got, "> feat: two")

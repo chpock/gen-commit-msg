@@ -124,8 +124,8 @@ func TestRenderSelectedSubjectNonConventional(t *testing.T) {
 	subject := "update the parser logic"
 	out := renderSelectedSubject(subject, true)
 
-	if !strings.HasPrefix(out, "\x1b[96m") {
-		t.Fatal("expected non-conventional selected subject to be wrapped in ANSI 14 (96)")
+	if !strings.HasPrefix(out, "\x1b[36m") {
+		t.Fatal("expected non-conventional selected subject to be wrapped in ANSI 6 (36)")
 	}
 
 	if !strings.HasSuffix(out, "\x1b[0m") {

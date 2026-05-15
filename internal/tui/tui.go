@@ -408,13 +408,13 @@ type commitItemDelegate struct {
 	decision selectionColorDecision
 }
 
-var selectedMarkerStyle = lipgloss.NewStyle().Foreground(lipgloss.CompleteColor{ANSI: "39"}).Bold(true)
+var selectedMarkerStyle = lipgloss.NewStyle().Foreground(lipgloss.CompleteColor{ANSI: "33"}).Bold(true)
 
 func renderSelectedMarker() string {
 	marker := selectedMarkerStyle.Render("> ")
 	if strings.HasPrefix(marker, "\x1b[") {
 		if end := strings.Index(marker, "m"); end > 2 {
-			return "\x1b[1;39m" + marker[end+1:]
+			return "\x1b[1;33m" + marker[end+1:]
 		}
 	}
 	return marker
@@ -439,14 +439,20 @@ func (d commitItemDelegate) Render(w io.Writer, m list.Model, index int, item li
 		return
 	}
 
+	colorDisabled := d.decision.mode == modeDisabledNoColor ||
+		d.decision.mode == modeDisabledEnv ||
+		d.decision.mode == modeDisabledCapability
+
 	if index != m.Index() {
-		_, _ = fmt.Fprint(w, "  "+ci.Subject)
+		if colorDisabled {
+			_, _ = fmt.Fprint(w, "  "+ci.Subject)
+		} else {
+			_, _ = fmt.Fprint(w, "  "+renderHighlightedSubject(ci.Subject))
+		}
 		return
 	}
 
-	if d.decision.mode == modeDisabledNoColor ||
-		d.decision.mode == modeDisabledEnv ||
-		d.decision.mode == modeDisabledCapability {
+	if colorDisabled {
 		_, _ = fmt.Fprint(w, "> "+ci.Subject)
 		return
 	}

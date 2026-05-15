@@ -273,9 +273,8 @@ func main() {
 
 			cleanupDone = true
 
-			p.Send(tui.AllStepsDone())
-
 			if ctx.Err() != nil {
+				p.Send(tui.AllStepsDone())
 				return
 			}
 
@@ -286,6 +285,8 @@ func main() {
 				items[i] = tui.CommitItem{Subject: msg.Subject, Body: msg.Body}
 			}
 			p.Send(tui.SetMessages(items))
+
+			p.Send(tui.AllStepsDone())
 		}()
 
 		finalModel, err := p.Run()

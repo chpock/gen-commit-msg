@@ -296,6 +296,23 @@ ok  	github.com/chpock/gen-commit-msg/internal/tui	1.011s
 **Deviations**
 - None.
 
+### Task 5 evidence addendum (arrow-key direct verification)
+
+**Blocking finding addressed**
+- Added direct result-state arrow navigation test to remove inferred-only
+  evidence.
+
+**Files changed**
+- `internal/tui/tui_test.go`
+
+**Test added**
+- `TestResultStateArrowKeysMoveSelection`
+
+**Evidence scope**
+- Verifies initial selected index in result state is `0`.
+- Verifies `tea.KeyDown` moves selection index to `1`.
+- Verifies `tea.KeyUp` moves selection index back to `0`.
+
 ### Spec-compliance review pass 3 (`ses_1d546965fffeU2Ugla8bwqO6BB`)
 
 **Result:** PASS
@@ -499,4 +516,61 @@ Evidence interpretation:
 **Result:** PASS
 
 **Blocking findings**
+- None.
+
+## Task 5
+
+### Implementer UX pass (`ses_1d5333315ffewUvD1bGxn5yYDB`)
+
+**Artifact-current check**
+- Confirmed current and aligned: `User flows`, `Accessibility targets`,
+  `Platform / harness constraints`, and `Operational mitigation` in
+  `docs/leyline/design/2026-05-15-selection-list-colors-ux.md` match current
+  implementation behavior in `internal/tui/tui.go` and
+  `internal/tui/selection_colors.go`.
+
+**State-matrix observations (Task 5 Step 3)**
+- Empty: N/A - zero messages do not enter this view.
+- Loading: N/A - this view is shown after generation.
+- Error: N/A - errors handled in progress/error flow before this view.
+- Success: Selected row has ANSI 39 bold marker and ANSI 14 text when
+  colorization is enabled; non-selected rows use terminal default; punctuation
+  highlighting applies only on selected row when pattern matches; if `NO_COLOR`
+  or `GCM_TUI_SELECTION_COLORS=0`, added colorization is disabled.
+- Permission-denied: N/A - no permission-gated action in this view.
+- Offline: N/A - no network action in this view.
+
+**Accessibility verification evidence (Task 5 Step 4)**
+
+```text
+go test -count=1 -race ./internal/tui -run "TestCommitDelegateSelectedAndUnselectedRendering|TestCommitDelegateNoColorFallbackIsPlainText|TestEnterInResultStateSetsStateDone|TestEscInResultStateClearsListWithoutSelection|TestResolveSelectionColorMode|TestConventionalPrefixMatch|TestRenderSelectedSubjectColorizedPrefix|TestRenderSelectedSubjectFallbackPlainText|TestLogSelectionColorDecisionFields"
+ok  	github.com/chpock/gen-commit-msg/internal/tui	1.048s
+```
+
+Evidence mapping:
+- Keyboard flow: Enter/Esc behavior verified by
+  `TestEnterInResultStateSetsStateDone` and
+  `TestEscInResultStateClearsListWithoutSelection`; no feature code overrides
+  Bubble Tea arrow navigation handling.
+- Plain-text/screen-reader orientation: selected-row output preserves complete
+  subject text with visible `> ` marker after ANSI stripping.
+- Color independence: disabled-mode/fallback invariants verified for
+  `NO_COLOR`, env toggle disable, and capability fallback via
+  `TestResolveSelectionColorMode` +
+  `TestCommitDelegateNoColorFallbackIsPlainText`.
+- Diagnostics safety: mode-decision logging assertions verify metadata-only
+  fields (no subject/full-row payload) in
+  `TestLogSelectionColorDecisionFields`.
+
+**Reconciliation (Task 5 Step 5)**
+- No divergence found between implementation and approved UX artifact.
+- No production file changes required for Task 5.
+
+**Files changed**
+- None.
+
+**Commit SHA**
+- None.
+
+**Deviations**
 - None.

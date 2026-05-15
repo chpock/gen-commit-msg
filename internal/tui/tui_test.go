@@ -649,6 +649,35 @@ func TestMultiMessageSetsListHeight(t *testing.T) {
 	}
 }
 
+func TestResultStateArrowKeysMoveSelection(t *testing.T) {
+	m := NewModel(3, false)
+	msg := SetMessages([]CommitItem{
+		{Subject: "feat: a", Body: ""},
+		{Subject: "feat: b", Body: ""},
+		{Subject: "feat: c", Body: ""},
+	})
+	updated, _ := m.Update(msg)
+	result := updated.(Model)
+
+	if got := result.list.Index(); got != 0 {
+		t.Fatalf("initial selected index = %d, want 0", got)
+	}
+
+	down := tea.KeyMsg{Type: tea.KeyDown}
+	updatedDown, _ := result.Update(down)
+	resultDown := updatedDown.(Model)
+	if got := resultDown.list.Index(); got != 1 {
+		t.Fatalf("selected index after down = %d, want 1", got)
+	}
+
+	up := tea.KeyMsg{Type: tea.KeyUp}
+	updatedUp, _ := resultDown.Update(up)
+	resultUp := updatedUp.(Model)
+	if got := resultUp.list.Index(); got != 0 {
+		t.Fatalf("selected index after up = %d, want 0", got)
+	}
+}
+
 func TestEnterInResultStateSetsStateDone(t *testing.T) {
 	m := NewModel(3, false)
 	msg := SetMessages([]CommitItem{

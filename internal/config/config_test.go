@@ -234,6 +234,39 @@ func TestParseFlagsOutputCLIOverridesEnv(t *testing.T) {
 	}
 }
 
+func TestValidateOutputPathEmpty(t *testing.T) {
+	cfg := &Config{Output: ""}
+	if err := cfg.ValidateOutputPath(); err != nil {
+		t.Errorf("expected nil error for empty output path, got: %v", err)
+	}
+}
+
+func TestValidateOutputPathWritableFile(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/commit-msg.txt"
+	cfg := &Config{Output: path}
+	if err := cfg.ValidateOutputPath(); err != nil {
+		t.Errorf("expected nil error for writable path, got: %v", err)
+	}
+}
+
+func TestValidateOutputPathNonExistentParent(t *testing.T) {
+	cfg := &Config{Output: "/nonexistent-dir-xyz/commit-msg.txt"}
+	err := cfg.ValidateOutputPath()
+	if err == nil {
+		t.Fatal("expected error for non-existent parent directory")
+	}
+}
+
+func TestValidateOutputPathIsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &Config{Output: dir}
+	err := cfg.ValidateOutputPath()
+	if err == nil {
+		t.Fatal("expected error when output path is a directory")
+	}
+}
+
 func TestParseFlagsValidationSubjectMinMaxEqual(t *testing.T) {
 	os.Args = []string{"gen-commit-msg", "--subject-min", "3", "--subject-max", "3"}
 	cfg, err := ParseFlags()

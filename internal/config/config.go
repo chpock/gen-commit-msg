@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	flag "github.com/spf13/pflag"
@@ -149,4 +150,28 @@ func getUintFlagOrEnv(flags *flag.FlagSet, name, envVar string, defaultVal uint)
 	}
 	slog.Debug("config resolved from env", "name", name, "env", envVar, "value", n)
 	return uint(n)
+}
+
+func (c *Config) ValidateOutputPath() error {
+	if c.Output == "" {
+		return nil
+	}
+	dir := filepath.Dir(c.Output)
+	info, err := os.Stat(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("output directory does not exist: %s", dir)
+		}
+		return fmt.Errorf("cannot access output directory %s: %w", dir, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("output parent is not a directory: %s", dir)
+	}
+	f, err := os.OpenFile(c.Output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		return fmt.Errorf("cannot write to output file %s: %w", c.Output, err)
+	}
+	_ = f.Close()
+	_ = os.Remove(c.Output)
+	return nil
 }

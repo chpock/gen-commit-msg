@@ -673,3 +673,6 @@ branch-level review.
 ### Suggestions
 - **D1** `internal/tui/tui.go:413-421` — Consider a dedicated unit test for `renderSelectedMarker` or replace normalization with lipgloss style combining foreground+bold in one constructor.
 - **D2** `internal/tui/selection_colors_test.go:107-120` — Add assertions for exact ANSI sequences (`\x1b[90m`, `\x1b[91m`, `\x1b[96m`) in `TestRenderSelectedSubjectColorizedPrefix`.
+
+Code review complete - round 1 - 2026-05-15
+Design review complete - round 1 - 2026-05-15

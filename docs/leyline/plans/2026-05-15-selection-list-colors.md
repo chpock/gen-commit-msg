@@ -28,7 +28,7 @@
 **Files:**
 - Create: `internal/tui/selection_colors_test.go`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `internal/tui/selection_colors_test.go`:
 
@@ -73,14 +73,14 @@ func TestResolveSelectionColorMode(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the test, confirm failure**
+- [x] **Step 2: Run the test, confirm failure**
 
 ```sh
 go test -count=1 -race ./internal/tui -run TestResolveSelectionColorMode
 # Expected: compile failure for undefined types/functions (capabilityClass, selectionColorMode, resolveSelectionColorMode)
 ```
 
-- [ ] **Step 3: Implement minimal code**
+- [x] **Step 3: Implement minimal code**
 
 Create `internal/tui/selection_colors.go`:
 
@@ -134,14 +134,14 @@ func resolveSelectionColorMode(noColorValue, toggleValue string, capability capa
 }
 ```
 
-- [ ] **Step 4: Run tests, confirm pass**
+- [x] **Step 4: Run tests, confirm pass**
 
 ```sh
 go test -count=1 -race ./internal/tui -run TestResolveSelectionColorMode
 # Expected: passing
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add internal/tui/selection_colors.go internal/tui/selection_colors_test.go && git commit -m "test(tui): codify selection color mode resolution"
@@ -154,7 +154,7 @@ git add internal/tui/selection_colors.go internal/tui/selection_colors_test.go &
 **Files:**
 - Modify: `internal/tui/selection_colors_test.go`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `internal/tui/selection_colors_test.go`:
 
@@ -201,14 +201,14 @@ func TestRenderSelectedSubjectFallbackPlainText(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests, confirm failure**
+- [x] **Step 2: Run tests, confirm failure**
 
 ```sh
 go test -count=1 -race ./internal/tui -run "TestConventionalPrefixMatch|TestRenderSelectedSubject"
 # Expected: compile failure for undefined conventionalPrefixMatch/renderSelectedSubject
 ```
 
-- [ ] **Step 3: Implement minimal code**
+- [x] **Step 3: Implement minimal code**
 
 In `internal/tui/selection_colors.go`, update the import block to include `regexp`
 and `github.com/charmbracelet/lipgloss` (keep the existing `strings` import),
@@ -243,14 +243,14 @@ func renderSelectedSubject(subject string, enableColors bool) string {
 }
 ```
 
-- [ ] **Step 4: Run tests, confirm pass**
+- [x] **Step 4: Run tests, confirm pass**
 
 ```sh
 go test -count=1 -race ./internal/tui -run "TestConventionalPrefixMatch|TestRenderSelectedSubject"
 # Expected: passing
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add internal/tui/selection_colors.go internal/tui/selection_colors_test.go && git commit -m "feat(tui): add conventional prefix token renderer"
@@ -264,7 +264,7 @@ git add internal/tui/selection_colors.go internal/tui/selection_colors_test.go &
 - Modify: `internal/tui/tui.go`
 - Modify: `internal/tui/selection_colors_test.go`
 
-- [ ] **Step 1: Write failing tests for mode logging and safety**
+- [x] **Step 1: Write failing tests for mode logging and safety**
 
 In `internal/tui/selection_colors_test.go`, update imports to include `context`
 and `log/slog`, then add:
@@ -301,14 +301,14 @@ func (h *captureHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
 func (h *captureHandler) WithGroup(string) slog.Handler      { return h }
 ```
 
-- [ ] **Step 2: Run tests, confirm failure**
+- [x] **Step 2: Run tests, confirm failure**
 
 ```sh
 go test -count=1 -race ./internal/tui -run TestLogSelectionColorDecisionFields
 # Expected: compile failure for undefined logSelectionColorDecision
 ```
 
-- [ ] **Step 3: Implement minimal code**
+- [x] **Step 3: Implement minimal code**
 
 In `internal/tui/selection_colors.go`, update imports to include `log/slog`, then
 add:
@@ -356,14 +356,14 @@ type commitItemDelegate struct {
 }
 ```
 
-- [ ] **Step 4: Run tests, confirm pass**
+- [x] **Step 4: Run tests, confirm pass**
 
 ```sh
 go test -count=1 -race ./internal/tui -run TestLogSelectionColorDecisionFields
 # Expected: passing
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add internal/tui/tui.go internal/tui/selection_colors.go internal/tui/selection_colors_test.go && git commit -m "feat(tui): log selection color mode decisions"
@@ -377,7 +377,7 @@ git add internal/tui/tui.go internal/tui/selection_colors.go internal/tui/select
 - Modify: `internal/tui/tui.go`
 - Modify: `internal/tui/tui_test.go`
 
-- [ ] **Step 1: Write failing integration tests for delegate render output**
+- [x] **Step 1: Write failing integration tests for delegate render output**
 
 Add to `internal/tui/tui_test.go`:
 
@@ -428,14 +428,14 @@ func TestCommitDelegateNoColorFallbackIsPlainText(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests, confirm failure**
+- [x] **Step 2: Run tests, confirm failure**
 
 ```sh
 go test -count=1 -race ./internal/tui -run "TestCommitDelegateSelectedAndUnselectedRendering|TestCommitDelegateNoColorFallbackIsPlainText"
 # Expected: failures because delegate currently bolds selected row only and does not enforce new fallback/token behavior
 ```
 
-- [ ] **Step 3: Implement minimal code**
+- [x] **Step 3: Implement minimal code**
 
 In `internal/tui/tui.go`, replace `Render` with:
 
@@ -473,14 +473,14 @@ func stripANSI(s string) string {
 }
 ```
 
-- [ ] **Step 4: Run tests, confirm pass**
+- [x] **Step 4: Run tests, confirm pass**
 
 ```sh
 go test -count=1 -race ./internal/tui -run "TestCommitDelegateSelectedAndUnselectedRendering|TestCommitDelegateNoColorFallbackIsPlainText"
 # Expected: passing
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add internal/tui/tui.go internal/tui/tui_test.go && git commit -m "feat(tui): colorize selected commit row with safe fallback"
@@ -493,22 +493,22 @@ git add internal/tui/tui.go internal/tui/tui_test.go && git commit -m "feat(tui)
 **Surface:** Message selection view
 **Artifact reference:** `docs/leyline/design/2026-05-15-selection-list-colors-ux.md#user-flows`
 
-- [ ] **Step 1:** Confirm artifact sections are current (`User flows`, `Accessibility targets`, `Platform / harness constraints`, `Operational mitigation`) and match implementation intent.
-- [ ] **Step 2:** Implement the surface behavior per artifact (selected marker/text split color, punctuation token colors only for anchored conventional-like selected prefixes, unstyled non-selected rows).
-- [ ] **Step 3:** Trigger each state from the UX state matrix and observe:
+- [x] **Step 1:** Confirm artifact sections are current (`User flows`, `Accessibility targets`, `Platform / harness constraints`, `Operational mitigation`) and match implementation intent.
+- [x] **Step 2:** Implement the surface behavior per artifact (selected marker/text split color, punctuation token colors only for anchored conventional-like selected prefixes, unstyled non-selected rows).
+- [x] **Step 3:** Trigger each state from the UX state matrix and observe:
   - Empty: N/A - zero messages do not enter this view
   - Loading: N/A - this view is shown after generation
   - Error: N/A - errors handled in progress/error flow before this view
   - Success: Selected row has ANSI 39 bold marker and ANSI 14 text when colorization is enabled; non-selected rows use terminal default; punctuation highlighting applies only on selected row when pattern matches; if `NO_COLOR` or `GCM_TUI_SELECTION_COLORS=0`, added colorization is disabled
   - Permission-denied: N/A - no permission-gated action in this view
   - Offline: N/A - no network action in this view
-- [ ] **Step 4:** Run accessibility verification procedure:
+- [x] **Step 4:** Run accessibility verification procedure:
   - Keyboard flow: arrow keys move selection, Enter confirms, Esc exits.
   - Screen-reader/plain-text check: selected subject remains complete text; marker remains visible prefix.
   - Color independence check: with `NO_COLOR=1`, with `GCM_TUI_SELECTION_COLORS=0`, and with capability fallback forced, selected row still unambiguous by `> ` prefix and row position.
   - Diagnostics safety check: mode logs include mode metadata only and no subject/full-row content.
-- [ ] **Step 5:** Reconcile implementation with UX artifact; if behavior diverges, either fix code to match artifact or update UX spec and re-approve before continuing.
-- [ ] **Step 6:** Commit
+- [x] **Step 5:** Reconcile implementation with UX artifact; if behavior diverges, either fix code to match artifact or update UX spec and re-approve before continuing.
+- [x] **Step 6:** Commit
 
 ```sh
 git add docs/leyline/design/2026-05-15-selection-list-colors-ux.md docs/leyline/specs/2026-05-15-selection-list-colors-design.md internal/tui/tui.go internal/tui/tui_test.go internal/tui/selection_colors.go internal/tui/selection_colors_test.go && git commit -m "feat(tui): implement approved selection list color UX"
@@ -521,17 +521,17 @@ git add docs/leyline/design/2026-05-15-selection-list-colors-ux.md docs/leyline/
 **Files:**
 - Modify: none
 
-- [ ] **Step 1:** Exception: formatting task - no failing test. Verification: run `make all` and confirm fmt/vet/lint/test/build all pass.
-- [ ] **Step 1:** Exception: doc-only task - no failing test. Verification: run `make all` and confirm fmt/vet/lint/test/build all pass, then record evidence in the review log.
+- [x] **Step 1:** Exception: formatting task - no failing test. Verification: run `make all` and confirm fmt/vet/lint/test/build all pass.
+- [x] **Step 1:** Exception: doc-only task - no failing test. Verification: run `make all` and confirm fmt/vet/lint/test/build all pass, then record evidence in the review log.
 
 ```sh
 make all
 # Expected: all stages pass; binary builds successfully
 ```
 
-- [ ] **Step 2:** Record verification evidence for Stage 6 overlays (`verification-before-completion` and `accessibility-verification`) in task notes/review log.
+- [x] **Step 2:** Record verification evidence for Stage 6 overlays (`verification-before-completion` and `accessibility-verification`) in task notes/review log.
 
-- [ ] **Step 3:** Commit verification note (if review log updated).
+- [x] **Step 3:** Commit verification note (if review log updated).
 
 ```sh
 git add docs/leyline/plans/2026-05-15-selection-list-colors-review-log.md && git commit -m "docs(plan): record selection list colors verification evidence"

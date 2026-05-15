@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -404,12 +405,31 @@ func (m Model) ShouldQuit() bool {
 
 type commitItemDelegate struct {
 	list.DefaultDelegate
+	decision selectionColorDecision
+}
+
+var selectedMarkerStyle = lipgloss.NewStyle().Foreground(lipgloss.CompleteColor{ANSI: "39"}).Bold(true)
+
+func renderSelectedMarker() string {
+	marker := selectedMarkerStyle.Render("> ")
+	if strings.HasPrefix(marker, "\x1b[") {
+		if end := strings.Index(marker, "m"); end > 2 {
+			return "\x1b[1;39m" + marker[end+1:]
+		}
+	}
+	return marker
 }
 
 func newCommitDelegate() list.ItemDelegate {
 	d := list.NewDefaultDelegate()
 	d.SetSpacing(0)
-	return &commitItemDelegate{DefaultDelegate: d}
+	decision := resolveSelectionColorMode(
+		os.Getenv("NO_COLOR"),
+		os.Getenv("GCM_TUI_SELECTION_COLORS"),
+		detectCapabilityClass(),
+	)
+	logSelectionColorDecision(slog.Default(), decision)
+	return &commitItemDelegate{DefaultDelegate: d, decision: decision}
 }
 
 func (d commitItemDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
@@ -419,20 +439,21 @@ func (d commitItemDelegate) Render(w io.Writer, m list.Model, index int, item li
 		return
 	}
 
-	var (
-		titleStyle lipgloss.Style
-		prefix     string
-	)
-
-	if index == m.Index() {
-		prefix = "> "
-		titleStyle = lipgloss.NewStyle().Bold(true)
-	} else {
-		prefix = "  "
-		titleStyle = lipgloss.NewStyle()
+	if index != m.Index() {
+		_, _ = fmt.Fprint(w, "  "+ci.Subject)
+		return
 	}
 
-	_, _ = fmt.Fprint(w, titleStyle.Render(prefix+ci.Subject))
+	if d.decision.mode == modeDisabledNoColor ||
+		d.decision.mode == modeDisabledEnv ||
+		d.decision.mode == modeDisabledCapability {
+		_, _ = fmt.Fprint(w, "> "+ci.Subject)
+		return
+	}
+
+	marker := renderSelectedMarker()
+	renderedSubject := renderSelectedSubject(ci.Subject, true)
+	_, _ = fmt.Fprint(w, marker+renderedSubject)
 }
 
 func (d commitItemDelegate) Height() int {

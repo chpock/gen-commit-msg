@@ -1,12 +1,23 @@
 package tui
 
 import (
+	"bytes"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
+
+var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func stripANSI(s string) string {
+	return ansiPattern.ReplaceAllString(s, "")
+}
 
 func TestModelInit(t *testing.T) {
 	m := NewModel(5, false)
@@ -638,6 +649,35 @@ func TestMultiMessageSetsListHeight(t *testing.T) {
 	}
 }
 
+func TestResultStateArrowKeysMoveSelection(t *testing.T) {
+	m := NewModel(3, false)
+	msg := SetMessages([]CommitItem{
+		{Subject: "feat: a", Body: ""},
+		{Subject: "feat: b", Body: ""},
+		{Subject: "feat: c", Body: ""},
+	})
+	updated, _ := m.Update(msg)
+	result := updated.(Model)
+
+	if got := result.list.Index(); got != 0 {
+		t.Fatalf("initial selected index = %d, want 0", got)
+	}
+
+	down := tea.KeyMsg{Type: tea.KeyDown}
+	updatedDown, _ := result.Update(down)
+	resultDown := updatedDown.(Model)
+	if got := resultDown.list.Index(); got != 1 {
+		t.Fatalf("selected index after down = %d, want 1", got)
+	}
+
+	up := tea.KeyMsg{Type: tea.KeyUp}
+	updatedUp, _ := resultDown.Update(up)
+	resultUp := updatedUp.(Model)
+	if got := resultUp.list.Index(); got != 0 {
+		t.Fatalf("selected index after up = %d, want 0", got)
+	}
+}
+
 func TestEnterInResultStateSetsStateDone(t *testing.T) {
 	m := NewModel(3, false)
 	msg := SetMessages([]CommitItem{
@@ -686,5 +726,75 @@ func TestCommitItemDelegateHeightIsOne(t *testing.T) {
 	d := newCommitDelegate()
 	if d.Height() != 1 {
 		t.Errorf("delegate height = %d, want 1", d.Height())
+	}
+}
+
+func TestCommitDelegateSelectedAndUnselectedRendering(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("GCM_TUI_SELECTION_COLORS", "1")
+	t.Setenv("CLICOLOR_FORCE", "1")
+
+	previousProfile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	t.Cleanup(func() {
+		lipgloss.SetColorProfile(previousProfile)
+	})
+
+	d := commitItemDelegate{decision: selectionColorDecision{mode: modeEnabled}}
+	m := list.New([]list.Item{
+		CommitItem{Subject: "feat: one"},
+		CommitItem{Subject: "feat: two"},
+	}, d, 40, 2)
+	m.Select(1)
+
+	var unselected bytes.Buffer
+	d.Render(&unselected, m, 0, CommitItem{Subject: "feat: one"})
+	if got := unselected.String(); got != "  feat: one" {
+		t.Fatalf("unselected row = %q, want plain %q", got, "  feat: one")
+	}
+
+	var selected bytes.Buffer
+	d.Render(&selected, m, 1, CommitItem{Subject: "feat: two"})
+	selectedRaw := selected.String()
+	if !strings.Contains(selectedRaw, "\x1b[") {
+		t.Fatalf("selected row should include ANSI styling, got %q", selectedRaw)
+	}
+	if !regexp.MustCompile(`\x1b\[[0-9;]*39m`).MatchString(selectedRaw) {
+		t.Fatalf("selected marker should include ANSI 39 foreground behavior, got %q", selectedRaw)
+	}
+	if got := stripANSI(selectedRaw); got != "> feat: two" {
+		t.Fatalf("selected row text = %q, want %q", got, "> feat: two")
+	}
+}
+
+func TestCommitDelegateNoColorFallbackIsPlainText(t *testing.T) {
+	t.Setenv("CLICOLOR_FORCE", "1")
+
+	tests := []struct {
+		name string
+		mode selectionColorMode
+	}{
+		{name: "no color", mode: modeDisabledNoColor},
+		{name: "env toggle", mode: modeDisabledEnv},
+		{name: "capability", mode: modeDisabledCapability},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			d := commitItemDelegate{decision: selectionColorDecision{mode: tc.mode}}
+			m := list.New([]list.Item{CommitItem{Subject: "fix: fallback"}}, d, 40, 1)
+			m.Select(0)
+
+			var selected bytes.Buffer
+			d.Render(&selected, m, 0, CommitItem{Subject: "fix: fallback"})
+
+			got := selected.String()
+			if strings.Contains(got, "\x1b[") {
+				t.Fatalf("fallback row should be plain text without ANSI, got %q", got)
+			}
+			if got != "> fix: fallback" {
+				t.Fatalf("fallback row = %q, want %q", got, "> fix: fallback")
+			}
+		})
 	}
 }

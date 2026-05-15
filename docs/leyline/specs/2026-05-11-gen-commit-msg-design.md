@@ -110,6 +110,7 @@ Priority: CLI flag > env var > default.
 | `--agent` | `-a` | `GCM_AGENT` | string | gen-commit-msg | opencode agent name |
 | `--pause` | | `GCM_PAUSE` | on, off, on-error | on-error | Pause before exit behavior |
 | `--install-agent` | | `GCM_INSTALL_AGENT` | always, if-not-exists, no | if-not-exists | Agent installation behavior |
+| `--output` | `-o` | `GCM_OUTPUT` | path | (stdout) | Write commit message to file instead of stdout. See `docs/leyline/specs/2026-05-15-output-flag-design.md` for full specification. |
 
 Server hostname (`127.0.0.1`) and startup timeout (30s) are constants in the `server` package — not exposed as flags. Generation timeout (120s) is a constant in the `opencode` package.
 

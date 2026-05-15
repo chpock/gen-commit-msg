@@ -28,7 +28,7 @@ internal/tui/                 — Bubble Tea TUI: spinner → list of commit mes
 
 ## Config precedence
 
-CLI flag > `GCM_*` env var > default. Key env vars: `GCM_SUBJECT_COUNT`, `GCM_BODY`, `GCM_QUIET`, `GCM_AGENT`, `GCM_LOG_LEVEL`, `GCM_LOG_FILE`, `GCM_PAUSE`, `GCM_INSTALL_AGENT`.
+CLI flag > `GCM_*` env var > default. Key env vars: `GCM_SUBJECT_MIN`, `GCM_SUBJECT_MAX`, `GCM_BODY`, `GCM_QUIET`, `GCM_AGENT`, `GCM_LOG_LEVEL`, `GCM_LOG_FILE`, `GCM_PAUSE`, `GCM_INSTALL_AGENT`, `GCM_OUTPUT`.
 
 ## Runtime dependencies
 

@@ -111,6 +111,6 @@ Tone remains direct, technical, and English-only.
 - UX spec approved - round 4 - 2026-05-15
 - UX spec approved - round 5 - 2026-05-15
 - UX spec approved - round 6 - 2026-05-15
-- design-interrogation skipped - scope: single-screen-ui with one surface;
-  state matrix has one surface row and round 6 findings were non-material
-  `(R)/(E)` refinements
+design-interrogation skipped - scope: single-screen-ui with one surface; state
+matrix has one surface row and round 6 findings were non-material `(R)/(E)`
+refinements

@@ -243,4 +243,4 @@ selected-text color (no punctuation token coloring).
 - Product spec approved - round 4 - 2026-05-15
 - Product spec approved - round 5 - 2026-05-15
 - Product spec approved - round 6 - 2026-05-15
-- Deep-discovery pass complete - round 6 - 2026-05-15
+Deep-discovery pass complete - round 6 - 2026-05-15

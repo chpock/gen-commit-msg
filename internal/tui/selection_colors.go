@@ -1,7 +1,5 @@
 package tui
 
-import "strings"
-
 type capabilityClass string
 
 const (
@@ -30,18 +28,36 @@ type selectionColorDecision struct {
 }
 
 func resolveSelectionColorMode(noColorValue, toggleValue string, capability capabilityClass) selectionColorDecision {
-	normalized := strings.TrimSpace(toggleValue)
-	if strings.TrimSpace(noColorValue) != "" {
-		return selectionColorDecision{mode: modeDisabledNoColor, capability: capability, envRawPresent: toggleValue != "", envNormalized: normalized, envRecognized: normalized == "0" || normalized == "1" || normalized == ""}
+	normalized := trimASCIISpace(toggleValue)
+	if trimASCIISpace(noColorValue) != "" {
+		return selectionColorDecision{mode: modeDisabledNoColor, capability: capability, envRawPresent: toggleValue != "", envNormalized: normalized, envRecognized: normalized == "0" || normalized == ""}
 	}
 	if capability == capabilityNoColor || capability == capabilityDegraded {
-		return selectionColorDecision{mode: modeDisabledCapability, capability: capability, envRawPresent: toggleValue != "", envNormalized: normalized, envRecognized: normalized == "0" || normalized == "1" || normalized == ""}
+		return selectionColorDecision{mode: modeDisabledCapability, capability: capability, envRawPresent: toggleValue != "", envNormalized: normalized, envRecognized: normalized == "0" || normalized == ""}
 	}
 	if normalized == "0" {
 		return selectionColorDecision{mode: modeDisabledEnv, capability: capability, envRawPresent: toggleValue != "", envNormalized: normalized, envRecognized: true}
 	}
-	if normalized == "" || normalized == "1" {
+	if normalized == "" {
 		return selectionColorDecision{mode: modeEnabled, capability: capability, envRawPresent: toggleValue != "", envNormalized: normalized, envRecognized: true}
 	}
 	return selectionColorDecision{mode: modeEnabledInvalidEnv, capability: capability, envRawPresent: true, envNormalized: normalized, envRecognized: false, warnInvalidToggle: true}
+}
+
+func trimASCIISpace(s string) string {
+	start := 0
+	for start < len(s) && isASCIISpace(s[start]) {
+		start++
+	}
+
+	end := len(s)
+	for end > start && isASCIISpace(s[end-1]) {
+		end--
+	}
+
+	return s[start:end]
+}
+
+func isASCIISpace(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == '\f' || b == '\v'
 }

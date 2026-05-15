@@ -46,7 +46,8 @@ func main() {
 	slog.Debug("gen-commit-msg starting", "version", version,
 		"subject_min", cfg.SubjectMin, "subject_max", cfg.SubjectMax, "body", cfg.Body,
 		"quiet", cfg.Quiet, "agent", cfg.Agent, "log_level", cfg.LogLevel,
-		"log_file", cfg.LogFile, "pause", cfg.Pause, "install_agent", cfg.InstallAgent)
+		"log_file", cfg.LogFile, "pause", cfg.Pause, "install_agent", cfg.InstallAgent,
+		"output", cfg.Output)
 
 	isTTY := isTerminal()
 	slog.Debug("terminal check", "is_tty", isTTY)
@@ -61,6 +62,12 @@ func main() {
 			pauseWithEnter(isTTY, pauseMsg)
 		}
 		os.Exit(code)
+	}
+
+	if err := cfg.ValidateOutputPath(); err != nil {
+		slog.Error("output path validation failed", "error", err)
+		fmtError("Error: %v\n", err)
+		pauseExit(1, true)
 	}
 
 	if cfg.Version {
@@ -298,7 +305,9 @@ func main() {
 			os.Exit(1)
 		}
 		selected := m.SelectedMessage()
-		wrote, writeErr := writeSelectedMessage(os.Stdout, selected)
+		writer, closeWriter := resolveOutputWriter(cfg.Output)
+		wrote, writeErr := writeSelectedMessage(writer, selected)
+		closeWriter()
 		if writeErr != nil {
 			slog.Error("failed to write selected message", "error", writeErr)
 			fmtError("Error: failed to write selected message: %v\n", writeErr)
@@ -374,7 +383,9 @@ func main() {
 			pauseExit(1, true)
 		}
 		if len(messages) > 0 {
-			fmt.Println(formatMessageFromOC(messages[0]))
+			writer, closeWriter := resolveOutputWriter(cfg.Output)
+			fmt.Fprintln(writer, formatMessageFromOC(messages[0]))
+			closeWriter()
 		}
 		pauseExit(0, false)
 	}

@@ -82,3 +82,5 @@ Product spec approved - round 2 - 2026-05-15
 - (O) Early validation added: ValidateOutputPath() before server start
 - (O) No-staged-files contract documented: no file created, exit 0
 - (E) UX spec updated with GCM_OUTPUT env var table
+
+Deep-discovery pass complete - round 1 - 2026-05-15

@@ -72,3 +72,5 @@ The new file-write failures exit with code 1, consistent with all other runtime 
 
 UX spec approved - round 1 - 2026-05-15
 UX spec updated - round 2 - 2026-05-15 (added GCM_OUTPUT env var table)
+
+design-interrogation skipped - scope: cli-only with trivial error paths (single flag, three error messages)

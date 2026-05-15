@@ -722,6 +722,9 @@ func TestCommitDelegateSelectedAndUnselectedRendering(t *testing.T) {
 	if !strings.Contains(selectedRaw, "\x1b[") {
 		t.Fatalf("selected row should include ANSI styling, got %q", selectedRaw)
 	}
+	if !regexp.MustCompile(`\x1b\[[0-9;]*39m`).MatchString(selectedRaw) {
+		t.Fatalf("selected marker should include ANSI 39 foreground behavior, got %q", selectedRaw)
+	}
 	if got := stripANSI(selectedRaw); got != "> feat: two" {
 		t.Fatalf("selected row text = %q, want %q", got, "> feat: two")
 	}
@@ -730,18 +733,31 @@ func TestCommitDelegateSelectedAndUnselectedRendering(t *testing.T) {
 func TestCommitDelegateNoColorFallbackIsPlainText(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
 
-	d := commitItemDelegate{decision: selectionColorDecision{mode: modeDisabledNoColor}}
-	m := list.New([]list.Item{CommitItem{Subject: "fix: fallback"}}, d, 40, 1)
-	m.Select(0)
-
-	var selected bytes.Buffer
-	d.Render(&selected, m, 0, CommitItem{Subject: "fix: fallback"})
-
-	got := selected.String()
-	if strings.Contains(got, "\x1b[") {
-		t.Fatalf("fallback row should be plain text without ANSI, got %q", got)
+	tests := []struct {
+		name string
+		mode selectionColorMode
+	}{
+		{name: "no color", mode: modeDisabledNoColor},
+		{name: "env toggle", mode: modeDisabledEnv},
+		{name: "capability", mode: modeDisabledCapability},
 	}
-	if got != "> fix: fallback" {
-		t.Fatalf("fallback row = %q, want %q", got, "> fix: fallback")
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			d := commitItemDelegate{decision: selectionColorDecision{mode: tc.mode}}
+			m := list.New([]list.Item{CommitItem{Subject: "fix: fallback"}}, d, 40, 1)
+			m.Select(0)
+
+			var selected bytes.Buffer
+			d.Render(&selected, m, 0, CommitItem{Subject: "fix: fallback"})
+
+			got := selected.String()
+			if strings.Contains(got, "\x1b[") {
+				t.Fatalf("fallback row should be plain text without ANSI, got %q", got)
+			}
+			if got != "> fix: fallback" {
+				t.Fatalf("fallback row = %q, want %q", got, "> fix: fallback")
+			}
+		})
 	}
 }

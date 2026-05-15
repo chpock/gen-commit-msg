@@ -439,7 +439,7 @@ func (d commitItemDelegate) Render(w io.Writer, m list.Model, index int, item li
 		return
 	}
 
-	marker := lipgloss.NewStyle().Bold(true).Render("> ")
+	marker := "\x1b[1;39m> \x1b[0m"
 	renderedSubject := renderSelectedSubject(ci.Subject, true)
 	_, _ = fmt.Fprint(w, marker+renderedSubject)
 }

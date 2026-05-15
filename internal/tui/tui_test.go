@@ -9,6 +9,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
@@ -702,6 +704,12 @@ func TestCommitDelegateSelectedAndUnselectedRendering(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	t.Setenv("GCM_TUI_SELECTION_COLORS", "1")
 	t.Setenv("CLICOLOR_FORCE", "1")
+
+	previousProfile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	t.Cleanup(func() {
+		lipgloss.SetColorProfile(previousProfile)
+	})
 
 	d := commitItemDelegate{decision: selectionColorDecision{mode: modeEnabled}}
 	m := list.New([]list.Item{

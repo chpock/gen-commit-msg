@@ -19,6 +19,7 @@ type Config struct {
 	LogFile      string
 	Pause        string
 	InstallAgent string
+	Output       string
 	Version      bool
 	Help         bool
 }
@@ -34,6 +35,7 @@ func initFlags() *flag.FlagSet {
 	flags.String("log-file", "", "log output file (default: stderr)")
 	flags.String("pause", "on-error", "pause before exit: on, off, on-error")
 	flags.String("install-agent", "if-not-exists", "agent install behavior: always, if-not-exists, no")
+	flags.StringP("output", "o", "", "write commit message to file instead of stdout")
 	flags.BoolP("version", "V", false, "print version and exit")
 	flags.BoolP("help", "h", false, "print help and exit")
 	return flags
@@ -65,6 +67,7 @@ func ParseFlags() (*Config, error) {
 	cfg.LogFile = getStringFlagOrEnv(flags, "log-file", "GCM_LOG_FILE", "")
 	cfg.Pause = getStringFlagOrEnv(flags, "pause", "GCM_PAUSE", "on-error")
 	cfg.InstallAgent = getStringFlagOrEnv(flags, "install-agent", "GCM_INSTALL_AGENT", "if-not-exists")
+	cfg.Output = getStringFlagOrEnv(flags, "output", "GCM_OUTPUT", "")
 
 	if cfg.SubjectMin < 1 {
 		return nil, fmt.Errorf("subject-min must be at least 1, got %d", cfg.SubjectMin)

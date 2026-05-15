@@ -173,6 +173,67 @@ func TestParseFlagsValidationSubjectMaxGreaterThan20(t *testing.T) {
 	}
 }
 
+func TestParseFlagsOutputFlag(t *testing.T) {
+	os.Args = []string{"gen-commit-msg", "--output", "/tmp/test-msg.txt"}
+	cfg, err := ParseFlags()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Output != "/tmp/test-msg.txt" {
+		t.Errorf("Output = %q, want /tmp/test-msg.txt", cfg.Output)
+	}
+}
+
+func TestParseFlagsOutputEnvVar(t *testing.T) {
+	os.Args = []string{"gen-commit-msg"}
+	_ = os.Setenv("GCM_OUTPUT", "/tmp/env-msg.txt")
+	t.Cleanup(func() { _ = os.Unsetenv("GCM_OUTPUT") })
+
+	cfg, err := ParseFlags()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Output != "/tmp/env-msg.txt" {
+		t.Errorf("Output = %q, want /tmp/env-msg.txt", cfg.Output)
+	}
+}
+
+func TestParseFlagsOutputDefault(t *testing.T) {
+	os.Args = []string{"gen-commit-msg"}
+	cfg, err := ParseFlags()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Output != "" {
+		t.Errorf("Output = %q, want empty string (default)", cfg.Output)
+	}
+}
+
+func TestParseFlagsOutputShortFlag(t *testing.T) {
+	os.Args = []string{"gen-commit-msg", "-o", "/tmp/short-msg.txt"}
+	cfg, err := ParseFlags()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Output != "/tmp/short-msg.txt" {
+		t.Errorf("Output = %q, want /tmp/short-msg.txt", cfg.Output)
+	}
+}
+
+func TestParseFlagsOutputCLIOverridesEnv(t *testing.T) {
+	os.Args = []string{"gen-commit-msg", "--output", "/tmp/cli-msg.txt"}
+	_ = os.Setenv("GCM_OUTPUT", "/tmp/env-msg.txt")
+	t.Cleanup(func() { _ = os.Unsetenv("GCM_OUTPUT") })
+
+	cfg, err := ParseFlags()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Output != "/tmp/cli-msg.txt" {
+		t.Errorf("Output = %q, want /tmp/cli-msg.txt (CLI overrides env)", cfg.Output)
+	}
+}
+
 func TestParseFlagsValidationSubjectMinMaxEqual(t *testing.T) {
 	os.Args = []string{"gen-commit-msg", "--subject-min", "3", "--subject-max", "3"}
 	cfg, err := ParseFlags()

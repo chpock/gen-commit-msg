@@ -650,3 +650,26 @@ go build -ldflags "-X main.version=dev" -o gen-commit-msg ./cmd/gen-commit-msg  
 
 All plan tasks complete. Branch `feat/selection-list-colors` is ready for Stage 7
 branch-level review.
+
+## Branch-level code review
+
+**Verdict: PASS** — No blocking findings.
+
+### Important findings
+- **F1** `internal/tui/tui.go:413-421` — `renderSelectedMarker()` uses string manipulation to rewrite lipgloss SGR output to `\x1b[1;39m`. If lipgloss changes to emit multiple SGRs, the normalization could produce incorrect output. Add a comment documenting the assumption.
+- **F2** `internal/tui/tui_test.go:733-735` — `TestCommitDelegateSelectedAndUnselectedRendering` sets `GCM_TUI_SELECTION_COLORS`/`CLICOLOR_FORCE`/clears `NO_COLOR` via `t.Setenv` but constructs the delegate directly with `mode: modeEnabled`, bypassing env-based resolution. Remove unused `t.Setenv` calls.
+
+### Suggestions
+- **F3** `internal/tui/tui.go:411` — Use `lipgloss.Color("39")` instead of `lipgloss.CompleteColor{ANSI: "39"}` for consistency.
+- **F4** `internal/tui/selection_colors.go:128-144` — Document why raw SGR is used (to preserve outer ANSI 14 wrap through punctuation token transitions).
+- **F5** `internal/tui/selection_colors.go:73-76` — `logSelectionColorDecision()` nil-return vs plan's `slog.Default()` fallback; document the deviation.
+- **F6** `internal/tui/tui_test.go:16` — Rename `ansiPattern`/`stripANSI` to `stripSGR` to match actual capability.
+- **F7** `docs/leyline/plans/2026-05-15-selection-list-colors.md:513-515` — Update Task 5 Step 6 to reflect actual commit granularity.
+
+## Branch-level design review
+
+**Verdict: PASS** — No Critical or Important findings. Iron-law 4 and 5 confirmed resolved.
+
+### Suggestions
+- **D1** `internal/tui/tui.go:413-421` — Consider a dedicated unit test for `renderSelectedMarker` or replace normalization with lipgloss style combining foreground+bold in one constructor.
+- **D2** `internal/tui/selection_colors_test.go:107-120` — Add assertions for exact ANSI sequences (`\x1b[90m`, `\x1b[91m`, `\x1b[96m`) in `TestRenderSelectedSubjectColorizedPrefix`.

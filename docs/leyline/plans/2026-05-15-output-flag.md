@@ -29,7 +29,7 @@
 - Modify: `internal/config/config.go`
 - Test: `internal/config/config_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `internal/config/config_test.go`, add:
 
@@ -82,14 +82,14 @@ func TestParseFlagsOutputShortFlag(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the test, confirm failure**
+- [x] **Step 2: Run the test, confirm failure**
 
 ```
 go test -count=1 -run 'TestParseFlagsOutput' ./internal/config/
 # Expected: compilation error — Config has no field Output
 ```
 
-- [ ] **Step 3: Implement minimal code**
+- [x] **Step 3: Implement minimal code**
 
 In `internal/config/config.go`:
 
@@ -113,14 +113,14 @@ cfg.Output = getStringFlagOrEnv(flags, "output", "GCM_OUTPUT", "")
 
 4. Update the `slog.Debug` call at the start of `main()` (near line 48) to include output — done in Task 3.
 
-- [ ] **Step 4: Run tests, confirm pass**
+- [x] **Step 4: Run tests, confirm pass**
 
 ```
 go test -count=1 -run 'TestParseFlagsOutput' ./internal/config/ -v
 # Expected: 4 passing tests
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```
 git add internal/config/config.go internal/config/config_test.go && git commit -m "feat(config): add --output flag and GCM_OUTPUT env var"
@@ -134,7 +134,7 @@ git add internal/config/config.go internal/config/config_test.go && git commit -
 - Modify: `internal/config/config.go`
 - Test: `internal/config/config_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `internal/config/config_test.go`, add:
 
@@ -173,14 +173,14 @@ func TestValidateOutputPathIsDirectory(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the test, confirm failure**
+- [x] **Step 2: Run the test, confirm failure**
 
 ```
 go test -count=1 -run 'TestValidateOutputPath' ./internal/config/
 # Expected: compilation error — Config has no method ValidateOutputPath
 ```
 
-- [ ] **Step 3: Implement minimal code**
+- [x] **Step 3: Implement minimal code**
 
 In `internal/config/config.go`, add after `ParseFlags()`:
 
@@ -212,14 +212,14 @@ func (c *Config) ValidateOutputPath() error {
 
 Add imports at top of file: `"os"` and `"path/filepath"`.
 
-- [ ] **Step 4: Run tests, confirm pass**
+- [x] **Step 4: Run tests, confirm pass**
 
 ```
 go test -count=1 -run 'TestValidateOutputPath' ./internal/config/ -v
 # Expected: 4 passing tests
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```
 git add internal/config/config.go internal/config/config_test.go && git commit -m "feat(config): add ValidateOutputPath for early file-write check"
@@ -233,7 +233,7 @@ git add internal/config/config.go internal/config/config_test.go && git commit -
 - Modify: `cmd/gen-commit-msg/main.go`
 - Test: `cmd/gen-commit-msg/output_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `cmd/gen-commit-msg/output_test.go`, add after existing tests:
 
@@ -267,14 +267,14 @@ func TestResolveOutputWriterFile(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the test, confirm failure**
+- [x] **Step 2: Run the test, confirm failure**
 
 ```
 go test -count=1 -run 'TestResolveOutputWriter' ./cmd/gen-commit-msg/
 # Expected: compilation error — resolveOutputWriter is not defined
 ```
 
-- [ ] **Step 3: Implement resolveOutputWriter**
+- [x] **Step 3: Implement resolveOutputWriter**
 
 In `cmd/gen-commit-msg/main.go`, add before `isTerminal()`:
 
@@ -293,14 +293,14 @@ func resolveOutputWriter(path string) (io.WriteCloser, func()) {
 }
 ```
 
-- [ ] **Step 4: Run tests, confirm pass**
+- [x] **Step 4: Run tests, confirm pass**
 
 ```
 go test -count=1 -run 'TestResolveOutputWriter' ./cmd/gen-commit-msg/ -v
 # Expected: 2 passing tests
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```
 git add cmd/gen-commit-msg/main.go cmd/gen-commit-msg/output_test.go && git commit -m "feat(main): add resolveOutputWriter helper for --output flag"
@@ -313,7 +313,7 @@ git add cmd/gen-commit-msg/main.go cmd/gen-commit-msg/output_test.go && git comm
 **Files:**
 - Modify: `cmd/gen-commit-msg/main.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 No standalone failing test possible for `main()` integration. Verification is through the test suite and `make build`:
 
@@ -323,14 +323,14 @@ go vet ./... && make build
 
 The existing tests in `output_test.go` (Task 3) already verify the helper logic. This task wires them into main.
 
-- [ ] **Step 2: Run the test, confirm failure**
+- [x] **Step 2: Run the test, confirm failure**
 
 ```
 make build
 # Expected: succeeds (config.Output is unused, but that's a vet warning, not a build failure)
 ```
 
-- [ ] **Step 3: Implement integration**
+- [x] **Step 3: Implement integration**
 
 In `cmd/gen-commit-msg/main.go`:
 
@@ -374,14 +374,14 @@ closeWriter()
 
 Note: `resolveOutputWriter` calls `os.Exit(1)` on failure, which skips deferred cleanup in the non-interactive path. However, `ValidateOutputPath()` is called early (before server start), so the file-open at write time should succeed. The early validation catches the error case.
 
-- [ ] **Step 4: Run tests, confirm pass**
+- [x] **Step 4: Run tests, confirm pass**
 
 ```
 go vet ./... && go test -count=1 ./... && make build
 # Expected: all packages pass, build succeeds
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```
 git add cmd/gen-commit-msg/main.go && git commit -m "feat(main): wire --output flag into TUI and non-interactive paths"
@@ -394,28 +394,28 @@ git add cmd/gen-commit-msg/main.go && git commit -m "feat(main): wire --output f
 **Surface:** CLI output (`--output` flag, error messages)
 **Artifact reference:** `docs/leyline/design/2026-05-15-output-flag-ux.md#commands-enumerated`
 
-- [ ] **Step 1:** Confirm the artifact section is current (DRAW step)
+- [x] **Step 1:** Confirm the artifact section is current (DRAW step)
 
-- [ ] **Step 2:** Implement per the artifact (BUILD step) — completed in Tasks 1-4.
+- [x] **Step 2:** Implement per the artifact (BUILD step) — completed in Tasks 1-4.
 
-- [ ] **Step 3:** Trigger each state from the UX spec:
+- [x] **Step 3:** Trigger each state from the UX spec:
   - Error (file cannot be created): Run `gen-commit-msg ./gen-commit-msg --output /nonexistent-dir/msg.txt` — expect `Error: output directory does not exist: /nonexistent-dir` on stderr, exit code 1
   - Error (file write fails): Run `gen-commit-msg --output /dev/full` (Linux only) — expect `Error: failed to open output file "/dev/full": ...` on stderr, exit code 1
   - Success: Run with staged changes and `--output /tmp/test-msg.txt` — expect message written to file, stdout silent, exit code 0
   - Empty (no selection): Run in TUI with staged changes, cancel — expect no file created, exit code 0
 
-- [ ] **Step 4:** Run the accessibility verification:
+- [x] **Step 4:** Run the accessibility verification:
   - Color independence: error messages include path and OS error text — no meaning conveyed by color alone
   - Screen-reader-friendly: all errors are plain text on stderr
   - Verify with `gen-commit-msg --output /nonexistent/msg.txt 2>&1` — all output is plain text
 
-- [ ] **Step 5:** Side-by-side reconciliation (RECONCILE step):
+- [x] **Step 5:** Side-by-side reconciliation (RECONCILE step):
   - Error format matches UX spec: `Error: failed to open output file "path": <os error>`
   - Exit codes match UX spec: code 1 for runtime errors, code 0 for success
   - Help text displays `-o, --output string   write commit message to file instead of stdout`
   - No divergence expected — if any found, fix code OR update UX spec and loop back
 
-- [ ] **Step 6:** Commit
+- [x] **Step 6:** Commit
 
 ```
 git commit --allow-empty -m "ux(cli): verify --output flag UX alignment"

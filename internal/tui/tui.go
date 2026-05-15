@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -404,12 +405,19 @@ func (m Model) ShouldQuit() bool {
 
 type commitItemDelegate struct {
 	list.DefaultDelegate
+	decision selectionColorDecision
 }
 
 func newCommitDelegate() list.ItemDelegate {
 	d := list.NewDefaultDelegate()
 	d.SetSpacing(0)
-	return &commitItemDelegate{DefaultDelegate: d}
+	decision := resolveSelectionColorMode(
+		os.Getenv("NO_COLOR"),
+		os.Getenv("GCM_TUI_SELECTION_COLORS"),
+		detectCapabilityClass(),
+	)
+	logSelectionColorDecision(slog.Default(), decision)
+	return &commitItemDelegate{DefaultDelegate: d, decision: decision}
 }
 
 func (d commitItemDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
@@ -432,7 +440,15 @@ func (d commitItemDelegate) Render(w io.Writer, m list.Model, index int, item li
 		titleStyle = lipgloss.NewStyle()
 	}
 
-	_, _ = fmt.Fprint(w, titleStyle.Render(prefix+ci.Subject))
+	renderedSubject := ci.Subject
+	if index == m.Index() {
+		renderedSubject = renderSelectedSubject(
+			ci.Subject,
+			d.decision.mode == modeEnabled || d.decision.mode == modeEnabledInvalidEnv,
+		)
+	}
+
+	_, _ = fmt.Fprint(w, titleStyle.Render(prefix+renderedSubject))
 }
 
 func (d commitItemDelegate) Height() int {

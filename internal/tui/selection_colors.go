@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"log/slog"
 	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 var (
@@ -55,6 +57,32 @@ func resolveSelectionColorMode(noColorValue, toggleValue string, capability capa
 		return selectionColorDecision{mode: modeEnabled, capability: capability, envRawPresent: toggleValue != "", envNormalized: normalized, envRecognized: true}
 	}
 	return selectionColorDecision{mode: modeEnabledInvalidEnv, capability: capability, envRawPresent: true, envNormalized: normalized, envRecognized: false, warnInvalidToggle: true}
+}
+
+func detectCapabilityClass() capabilityClass {
+	profile := lipgloss.ColorProfile()
+	if profile == termenv.Ascii {
+		return capabilityNoColor
+	}
+	if profile == termenv.ANSI || profile == termenv.ANSI256 || profile == termenv.TrueColor {
+		return capabilityANSI
+	}
+	return capabilityDegraded
+}
+
+func logSelectionColorDecision(logger *slog.Logger, d selectionColorDecision) {
+	if logger == nil {
+		return
+	}
+	logger.Debug(
+		"selection color mode decision",
+		"mode", string(d.mode),
+		"capability", string(d.capability),
+		"env_raw_present", d.envRawPresent,
+		"env_normalized", d.envNormalized,
+		"env_recognized", d.envRecognized,
+		"warn_invalid_toggle", d.warnInvalidToggle,
+	)
 }
 
 func trimASCIISpace(s string) string {

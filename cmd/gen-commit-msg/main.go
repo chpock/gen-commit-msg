@@ -381,6 +381,19 @@ func main() {
 
 }
 
+func resolveOutputWriter(path string) (io.WriteCloser, func()) {
+	if path == "" {
+		return os.Stdout, func() {}
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		slog.Error("failed to open output file", "path", path, "error", err)
+		fmt.Fprintf(os.Stderr, "Error: failed to open output file %q: %v\n", path, err)
+		os.Exit(1)
+	}
+	return f, func() { _ = f.Close() }
+}
+
 func isTerminal() bool {
 	return isatty.IsTerminal(os.Stdout.Fd())
 }

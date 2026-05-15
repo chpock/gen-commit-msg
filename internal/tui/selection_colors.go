@@ -78,7 +78,7 @@ func logSelectionColorDecision(logger *slog.Logger, d selectionColorDecision) {
 		"selection color mode decision",
 		"mode", string(d.mode),
 		"source", "delegate_render",
-		"selected_row_styling", "colorized",
+		"selected_row_styling", d.mode == modeEnabled || d.mode == modeEnabledInvalidEnv,
 		"capability_class", string(d.capability),
 		"env_raw_present", d.envRawPresent,
 		"env_normalized_value", d.envNormalized,

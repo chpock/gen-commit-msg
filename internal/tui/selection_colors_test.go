@@ -159,8 +159,8 @@ func TestLogSelectionColorDecisionFields(t *testing.T) {
 		if got["source"] != "delegate_render" {
 			t.Fatalf("source=%v want=%q", got["source"], "delegate_render")
 		}
-		if got["selected_row_styling"] != "colorized" {
-			t.Fatalf("selected_row_styling=%v want=%q", got["selected_row_styling"], "colorized")
+		if got["selected_row_styling"] != false {
+			t.Fatalf("selected_row_styling=%v want=%v", got["selected_row_styling"], false)
 		}
 		if got["capability_class"] != string(d.capability) {
 			t.Fatalf("capability_class=%v want=%q", got["capability_class"], d.capability)
@@ -202,6 +202,15 @@ func TestLogSelectionColorDecisionFields(t *testing.T) {
 		}
 		if h.records[1].Message != "selection color toggle value is not recognized; using default behavior" {
 			t.Fatalf("warn message=%q", h.records[1].Message)
+		}
+
+		infoAttrs := map[string]any{}
+		h.records[0].Attrs(func(a slog.Attr) bool {
+			infoAttrs[a.Key] = a.Value.Any()
+			return true
+		})
+		if infoAttrs["selected_row_styling"] != true {
+			t.Fatalf("selected_row_styling=%v want=%v", infoAttrs["selected_row_styling"], true)
 		}
 
 		warnAttrs := map[string]any{}

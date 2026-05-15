@@ -315,3 +315,188 @@ ok  	github.com/chpock/gen-commit-msg/internal/tui	1.011s
 Not required for Task 3. Task 3 introduces mode-decision logging and delegate
 decision wiring only; it does not alter selected-row/unselected-row render output
 semantics, token styling behavior, or fallback surface behavior.
+
+## Task 4
+
+### Implementer pass 1 (`ses_1d53f5b93ffeKhSYT5aXnMabzv`)
+
+**Files changed**
+- `internal/tui/tui.go`
+- `internal/tui/tui_test.go`
+
+**Failing-test output**
+```text
+--- FAIL: TestCommitDelegateNoColorFallbackIsPlainText (0.00s)
+    tui_test.go:742: fallback row should be plain text without ANSI, got "\x1b[1m> fix: fallback\x1b[0m"
+FAIL
+FAIL	github.com/chpock/gen-commit-msg/internal/tui	0.016s
+FAIL
+```
+
+**Post-implementation test output**
+```text
+ok  	github.com/chpock/gen-commit-msg/internal/tui	1.018s
+```
+
+**Commit SHA**
+- `d5e32cb`
+
+**Deviations**
+- None.
+
+### Spec-compliance review pass 1 (`ses_1d53cf693ffe20ByGd7M0YsxLr`)
+
+**Result:** FAIL
+
+**Mismatches**
+- Selected marker style in `internal/tui/tui.go` was bold-only and did not set
+  explicit ANSI 39 foreground required by spec/UX.
+- Selected-row test in `internal/tui/tui_test.go` did not assert marker-specific
+  ANSI 39 behavior.
+
+### Code-quality review pass 1 (`ses_1d53cf685ffekBy39KI15KUfHz`)
+
+**Result:** FAIL
+
+**Blocking findings**
+- Important: fallback test coverage only exercised one disabled mode;
+  `modeDisabledEnv` and `modeDisabledCapability` needed explicit coverage.
+
+### Design review pass 1 (`ses_1d53cf67affeEgfEAUBVkEuP04`)
+
+**Result:** FAIL
+
+**Blocking findings**
+- Missing Task 4 accessibility evidence in review log at time of review.
+
+### Implementer fix pass 1 (`ses_1d53bc610ffeHyzXBNQme83o5I`)
+
+**Files changed**
+- `internal/tui/tui.go`
+- `internal/tui/tui_test.go`
+
+**Fix summary**
+- Updated selected marker rendering to include explicit ANSI 39 + bold contract.
+- Strengthened selected marker assertion to verify marker-specific ANSI behavior.
+- Added disabled fallback coverage for `modeDisabledNoColor`,
+  `modeDisabledEnv`, and `modeDisabledCapability`.
+
+**Test output**
+```text
+ok  	github.com/chpock/gen-commit-msg/internal/tui	1.028s
+```
+
+**Commit SHA**
+- `4af4651`
+
+**Deviations**
+- None.
+
+### Spec-compliance review pass 2 (`ses_1d53cf693ffe20ByGd7M0YsxLr`)
+
+**Result:** PASS
+
+**Blocking findings**
+- None.
+
+### Code-quality review pass 2 (`ses_1d53cf685ffekBy39KI15KUfHz`)
+
+**Result:** FAIL
+
+**Blocking findings**
+- Important: marker rendering used hardcoded ANSI literal; requested style-based
+  rendering for maintainability/portability.
+
+### Implementer fix pass 2 (`ses_1d5393ee1ffe0OMFxMnArJM5po`)
+
+**Files changed**
+- `internal/tui/tui.go`
+
+**Fix summary**
+- Replaced hardcoded ANSI marker literal with style-based marker renderer.
+- Preserved explicit ANSI 39 + bold contract and prior behavior invariants.
+
+**Test output**
+```text
+ok  	github.com/chpock/gen-commit-msg/internal/tui	1.031s
+```
+
+**Commit SHA**
+- `9caa12f`
+
+**Deviations**
+- Normalized emitted marker opening SGR to preserve strict ANSI 39 contract.
+
+### Spec-compliance review pass 3 (`ses_1d53cf693ffe20ByGd7M0YsxLr`)
+
+**Result:** PASS
+
+**Blocking findings**
+- None.
+
+### Code-quality review pass 3 (`ses_1d53cf685ffekBy39KI15KUfHz`)
+
+**Result:** PASS
+
+**Blocking findings**
+- None.
+
+### Systematic-debugging record - task 4
+
+- Root cause (one sentence, plain English): selected-row ANSI assertion depended on
+  ambient lipgloss runtime profile, so in this environment color output resolved
+  to plain text even with enabled mode.
+- Falsifying test: `go test -count=1 -race ./internal/tui -run TestCommitDelegateSelectedAndUnselectedRendering`
+- Hypothesis: if the test forces an ANSI-capable lipgloss profile, selected-row
+  ANSI assertions will pass deterministically.
+- Fix: set deterministic ANSI256 profile for
+  `TestCommitDelegateSelectedAndUnselectedRendering` and restore prior profile
+  with `t.Cleanup`.
+- Regression coverage:
+  - `go test -count=1 -race ./internal/tui -run TestCommitDelegateSelectedAndUnselectedRendering`
+  - `go test -count=1 -race ./internal/tui -run "TestEnterInResultStateSetsStateDone|TestEscInResultStateClearsListWithoutSelection|TestModelQuitOnCtrlC|TestCommitDelegateSelectedAndUnselectedRendering|TestCommitDelegateNoColorFallbackIsPlainText"`
+
+### Implementer fix pass 3 (`ses_1d5359becffeWY0yIYT3YQPhXe`)
+
+**Files changed**
+- `internal/tui/tui_test.go`
+
+**Fix summary**
+- Forced deterministic ANSI-capable lipgloss profile for
+  `TestCommitDelegateSelectedAndUnselectedRendering` and restored prior profile
+  in cleanup.
+
+**Test output**
+```text
+ok  	github.com/chpock/gen-commit-msg/internal/tui	1.011s
+ok  	github.com/chpock/gen-commit-msg/internal/tui	1.026s
+```
+
+**Commit SHA**
+- `bae74625c52882e1a83bdb8418a313243bce9d09`
+
+**Deviations**
+- None.
+
+### Accessibility evidence (Task 4)
+
+Keyboard and operability checks (from automated interaction tests):
+
+```text
+go test -count=1 -race ./internal/tui -run "TestEnterInResultStateSetsStateDone|TestEscInResultStateClearsListWithoutSelection|TestModelQuitOnCtrlC|TestCommitDelegateSelectedAndUnselectedRendering|TestCommitDelegateNoColorFallbackIsPlainText"
+ok  	github.com/chpock/gen-commit-msg/internal/tui	1.026s
+```
+
+Evidence interpretation:
+- Arrow/Enter/Esc flow remains intact by existing result-state keyboard tests.
+- Selected-row prefix remains plain-text `> ` when ANSI is stripped and in all
+  disabled fallback modes.
+- Non-selected rows remain unstyled (no ANSI escapes).
+- Selected-row render keeps complete subject text; no truncation introduced.
+
+### Design review pass 2 (`ses_1d53cf67affeEgfEAUBVkEuP04`)
+
+**Result:** PASS
+
+**Blocking findings**
+- None.

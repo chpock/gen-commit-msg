@@ -137,6 +137,21 @@ func TestRenderSelectedSubjectNonConventional(t *testing.T) {
 	}
 }
 
+func BenchmarkRenderSelectedSubject(b *testing.B) {
+	subjects := []string{
+		"fix(scope)!: message",
+		"feat(core): add feature",
+		"docs: update readme",
+		"plain non-conventional subject",
+		"fix: bug description",
+		"chore(deps): bump to v2",
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		renderSelectedSubject(subjects[i%len(subjects)], true)
+	}
+}
+
 func TestLogSelectionColorDecisionFields(t *testing.T) {
 	t.Run("info record includes required mode fields", func(t *testing.T) {
 		h := &captureHandler{}

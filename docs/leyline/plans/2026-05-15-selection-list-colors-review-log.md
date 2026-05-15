@@ -598,3 +598,20 @@ Evidence mapping:
   ANSI 14 wrap through all punctuation tokens.
 - D4: Added `TestRenderSelectedSubjectNonConventional` verifying ANSI 14 prefix,
   ANSI reset suffix, and subject text presence for non-conventional subjects.
+
+### Performance benchmark (spec lines 236-237)
+
+**Files changed**
+- `internal/tui/selection_colors_test.go`
+
+**Benchmark output**
+```text
+BenchmarkRenderSelectedSubject-18    	 2246256	       510.4 ns/op	     141 B/op	       3 allocs/op
+PASS
+```
+
+**Commit SHA**
+- (to be filled)
+
+**Deviations**
+- None

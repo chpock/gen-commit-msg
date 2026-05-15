@@ -20,7 +20,7 @@ func stripANSI(s string) string {
 }
 
 func TestModelInit(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	if m.state != stateProgress {
 		t.Error("initial state should be progress")
 	}
@@ -33,7 +33,7 @@ func TestModelInit(t *testing.T) {
 }
 
 func TestModelInitQuiet(t *testing.T) {
-	m := NewModel(5, true)
+	m := NewModel(5, true, nil)
 	if m.state != stateProgress {
 		t.Error("initial state should be progress")
 	}
@@ -43,7 +43,7 @@ func TestModelInitQuiet(t *testing.T) {
 }
 
 func TestQuietInitSkipsSpinner(t *testing.T) {
-	m := NewModel(5, true)
+	m := NewModel(5, true, nil)
 	cmd := m.Init()
 	if cmd != nil {
 		t.Error("Init with quiet should return nil, skipping spinner")
@@ -51,7 +51,7 @@ func TestQuietInitSkipsSpinner(t *testing.T) {
 }
 
 func TestModelInitMsg(t *testing.T) {
-	m := NewModel(3, false)
+	m := NewModel(3, false, nil)
 	cmd := m.Init()
 	if cmd == nil {
 		t.Error("Init should return a command")
@@ -59,16 +59,19 @@ func TestModelInitMsg(t *testing.T) {
 }
 
 func TestModelQuitOnCtrlC(t *testing.T) {
-	m := NewModel(3, false)
+	m := NewModel(3, false, nil)
 	msg := tea.KeyMsg{Type: tea.KeyCtrlC}
 	updated, _ := m.Update(msg)
-	if updated.(Model).quitting != true {
-		t.Error("Ctrl+C should set quitting to true")
+	if updated.(Model).shuttingDown != true {
+		t.Error("Ctrl+C should set shuttingDown to true")
+	}
+	if updated.(Model).quitting != false {
+		t.Error("Ctrl+C should not quit immediately")
 	}
 }
 
 func TestModelQuitOnEsc(t *testing.T) {
-	m := NewModel(3, false)
+	m := NewModel(3, false, nil)
 	msg := tea.KeyMsg{Type: tea.KeyEsc}
 	updated, _ := m.Update(msg)
 	if updated.(Model).quitting != true {
@@ -99,7 +102,7 @@ func TestSetErrorReturnsGenerationResultMsg(t *testing.T) {
 }
 
 func TestSingleMessageAutoSelect(t *testing.T) {
-	m := NewModel(1, false)
+	m := NewModel(1, false, nil)
 	msg := SetMessages([]CommitItem{{Subject: "feat: done", Body: ""}})
 	updated, cmd := m.Update(msg)
 	if updated.(Model).selected != "feat: done" {
@@ -111,7 +114,7 @@ func TestSingleMessageAutoSelect(t *testing.T) {
 }
 
 func TestMultiMessageGoesToResultState(t *testing.T) {
-	m := NewModel(3, false)
+	m := NewModel(3, false, nil)
 	msg := SetMessages([]CommitItem{
 		{Subject: "feat: a", Body: ""},
 		{Subject: "feat: b", Body: ""},
@@ -123,7 +126,7 @@ func TestMultiMessageGoesToResultState(t *testing.T) {
 }
 
 func TestZeroMessagesGoesToErrorState(t *testing.T) {
-	m := NewModel(3, false)
+	m := NewModel(3, false, nil)
 	msg := SetMessages([]CommitItem{})
 	updated, _ := m.Update(msg)
 	if updated.(Model).state != stateError {
@@ -135,7 +138,7 @@ func TestZeroMessagesGoesToErrorState(t *testing.T) {
 }
 
 func TestErrorMsgGoesToErrorState(t *testing.T) {
-	m := NewModel(3, false)
+	m := NewModel(3, false, nil)
 	msg := SetError(fmt.Errorf("server crash"))
 	updated, _ := m.Update(msg)
 	if updated.(Model).state != stateError {
@@ -165,7 +168,7 @@ func TestFormatMessageWithBody(t *testing.T) {
 }
 
 func TestSpinnerView(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateSpinner
 	v := m.View()
 	if !contains(v, "Generating commit messages") {
@@ -174,7 +177,7 @@ func TestSpinnerView(t *testing.T) {
 }
 
 func TestSpinnerViewQuiet(t *testing.T) {
-	m := NewModel(5, true)
+	m := NewModel(5, true, nil)
 	m.state = stateSpinner
 	v := m.View()
 	if contains(v, "Generating commit messages") {
@@ -183,7 +186,7 @@ func TestSpinnerViewQuiet(t *testing.T) {
 }
 
 func TestErrorView(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateError
 	m.err = fmt.Errorf("test error")
 	v := m.RenderError()
@@ -196,7 +199,7 @@ func TestErrorView(t *testing.T) {
 }
 
 func TestSelectedMessage(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.selected = "feat: test"
 	if m.SelectedMessage() != "feat: test" {
 		t.Error("SelectedMessage() mismatch")
@@ -204,7 +207,7 @@ func TestSelectedMessage(t *testing.T) {
 }
 
 func TestErrorAccessor(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	err := fmt.Errorf("oops")
 	m.err = err
 	if m.Error() != err {
@@ -213,7 +216,7 @@ func TestErrorAccessor(t *testing.T) {
 }
 
 func TestShouldQuit(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	if m.ShouldQuit() {
 		t.Error("ShouldQuit should be false initially")
 	}
@@ -255,6 +258,9 @@ func TestStepStatusValues(t *testing.T) {
 	if StepSkipped != 5 {
 		t.Error("StepSkipped should be 5")
 	}
+	if StepInterrupted != 6 {
+		t.Error("StepInterrupted should be 6")
+	}
 }
 
 func TestStepLabels(t *testing.T) {
@@ -284,7 +290,7 @@ func contains(s, substr string) bool {
 }
 
 func TestProgressStateInit(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateProgress
 	cmd := m.Init()
 	if cmd == nil {
@@ -293,7 +299,7 @@ func TestProgressStateInit(t *testing.T) {
 }
 
 func TestProgressViewShowsAllSteps(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	labels := stepLabels()
@@ -309,7 +315,7 @@ func TestProgressViewShowsAllSteps(t *testing.T) {
 }
 
 func TestProgressViewDoesNotEndWithExtraBlankLine(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	labels := stepLabels()
@@ -324,7 +330,7 @@ func TestProgressViewDoesNotEndWithExtraBlankLine(t *testing.T) {
 }
 
 func TestProgressViewAddsTrailingNewlineWhenQuitting(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	labels := stepLabels()
@@ -332,15 +338,15 @@ func TestProgressViewAddsTrailingNewlineWhenQuitting(t *testing.T) {
 		m.steps[i] = stepItem{label: labels[i], status: StepRunning}
 	}
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
-	v := updated.(Model).View()
+	m.quitting = true
+	v := m.View()
 	if !strings.HasSuffix(v, "\n") {
 		t.Fatalf("progress view should end with newline while quitting, got: %q", v)
 	}
 }
 
 func TestStepUpdateChangesStatus(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	labels := stepLabels()
@@ -355,7 +361,7 @@ func TestStepUpdateChangesStatus(t *testing.T) {
 }
 
 func TestProgressDoneAllStepsTransitionsToResult(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {
@@ -369,7 +375,7 @@ func TestProgressDoneAllStepsTransitionsToResult(t *testing.T) {
 }
 
 func TestStepFailureShowsError(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	labels := stepLabels()
@@ -397,7 +403,7 @@ func TestStepFailureShowsError(t *testing.T) {
 }
 
 func TestProgressViewQuiet(t *testing.T) {
-	m := NewModel(5, true)
+	m := NewModel(5, true, nil)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {
@@ -418,7 +424,7 @@ func TestAllStepsDoneMsg(t *testing.T) {
 }
 
 func TestKeyQuitOnFailedStep(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	labels := stepLabels()
@@ -437,7 +443,7 @@ func TestKeyQuitOnFailedStep(t *testing.T) {
 }
 
 func TestStepUpdateOutOfBoundsIsIgnored(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {
@@ -462,7 +468,7 @@ func TestStepUpdateOutOfBoundsIsIgnored(t *testing.T) {
 }
 
 func TestSpinnerTickInProgressState(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {
@@ -482,10 +488,13 @@ func TestStepSkippedValue(t *testing.T) {
 	if StepSkipped != 5 {
 		t.Errorf("StepSkipped = %v, want 5", StepSkipped)
 	}
+	if StepInterrupted != 6 {
+		t.Errorf("StepInterrupted = %v, want 6", StepInterrupted)
+	}
 }
 
 func TestStepFailureDoesNotAutoSkipDependentSteps(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	labels := stepLabels()
@@ -521,7 +530,7 @@ func TestStepFailureDoesNotAutoSkipDependentSteps(t *testing.T) {
 }
 
 func TestErrorViewShowsSteps(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateError
 	m.err = fmt.Errorf("connection refused")
 	m.steps = make([]stepItem, 5)
@@ -549,7 +558,7 @@ func TestErrorViewShowsSteps(t *testing.T) {
 }
 
 func TestAllStepsDoneWithFailureTransitionsToError(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {
@@ -565,7 +574,7 @@ func TestAllStepsDoneWithFailureTransitionsToError(t *testing.T) {
 }
 
 func TestStepUpdateAcceptedAfterFailure(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {
@@ -590,7 +599,7 @@ func TestStepUpdateAcceptedAfterFailure(t *testing.T) {
 }
 
 func TestExplicitStepSkippedAcceptedAfterFailure(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {
@@ -624,7 +633,7 @@ func TestExplicitStepSkippedAcceptedAfterFailure(t *testing.T) {
 }
 
 func TestAllStepsDoneWithoutErrorGoesToResult(t *testing.T) {
-	m := NewModel(5, false)
+	m := NewModel(5, false, nil)
 	m.state = stateProgress
 	m.steps = make([]stepItem, 5)
 	for i := range m.steps {
@@ -638,7 +647,7 @@ func TestAllStepsDoneWithoutErrorGoesToResult(t *testing.T) {
 }
 
 func TestMultiMessageSetsListHeight(t *testing.T) {
-	m := NewModel(3, false)
+	m := NewModel(3, false, nil)
 	msg := SetMessages([]CommitItem{
 		{Subject: "feat: a", Body: ""},
 		{Subject: "feat: b", Body: ""},
@@ -650,7 +659,7 @@ func TestMultiMessageSetsListHeight(t *testing.T) {
 }
 
 func TestResultStateArrowKeysMoveSelection(t *testing.T) {
-	m := NewModel(3, false)
+	m := NewModel(3, false, nil)
 	msg := SetMessages([]CommitItem{
 		{Subject: "feat: a", Body: ""},
 		{Subject: "feat: b", Body: ""},
@@ -679,7 +688,7 @@ func TestResultStateArrowKeysMoveSelection(t *testing.T) {
 }
 
 func TestEnterInResultStateSetsStateDone(t *testing.T) {
-	m := NewModel(3, false)
+	m := NewModel(3, false, nil)
 	msg := SetMessages([]CommitItem{
 		{Subject: "feat: a", Body: ""},
 		{Subject: "feat: b", Body: ""},
@@ -698,7 +707,7 @@ func TestEnterInResultStateSetsStateDone(t *testing.T) {
 }
 
 func TestEscInResultStateClearsListWithoutSelection(t *testing.T) {
-	m := NewModel(3, false)
+	m := NewModel(3, false, nil)
 	msg := SetMessages([]CommitItem{
 		{Subject: "feat: a", Body: ""},
 		{Subject: "feat: b", Body: ""},
@@ -798,5 +807,281 @@ func TestCommitDelegateNoColorFallbackIsPlainText(t *testing.T) {
 				t.Fatalf("fallback row = %q, want %q", got, "> fix: fallback")
 			}
 		})
+	}
+}
+
+func TestCtrlCSecondPressForceQuits(t *testing.T) {
+	m := NewModel(5, false, nil)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepPending}
+	}
+
+	first := tea.KeyMsg{Type: tea.KeyCtrlC}
+	updated1, _ := m.Update(first)
+	if !updated1.(Model).shuttingDown {
+		t.Error("first Ctrl+C should set shuttingDown")
+	}
+	if updated1.(Model).quitting {
+		t.Error("first Ctrl+C should not quit")
+	}
+
+	second := tea.KeyMsg{Type: tea.KeyCtrlC}
+	updated2, cmd := updated1.(Model).Update(second)
+	if !updated2.(Model).quitting {
+		t.Error("second Ctrl+C should force quit")
+	}
+	if cmd == nil {
+		t.Error("second Ctrl+C should return tea.Quit")
+	}
+}
+
+func TestStepInterruptedDoesNotSetError(t *testing.T) {
+	m := NewModel(5, false, nil)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	labels := stepLabels()
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: labels[i], status: StepPending}
+	}
+
+	msg := StepUpdateMsg{Index: 2, Status: StepInterrupted, Detail: "Interrupted by user"}
+	updated, _ := m.Update(msg)
+
+	if updated.(Model).steps[2].status != StepInterrupted {
+		t.Error("step 2 should be StepInterrupted")
+	}
+	if updated.(Model).err != nil {
+		t.Error("StepInterrupted should not set m.err")
+	}
+	if !updated.(Model).shuttingDown {
+		t.Error("StepInterrupted should set shuttingDown")
+	}
+	if updated.(Model).stepDetail != "Interrupted by user" {
+		t.Errorf("stepDetail = %q, want %q", updated.(Model).stepDetail, "Interrupted by user")
+	}
+}
+
+func TestStepFailedDoesNotSetErrorDuringShutdown(t *testing.T) {
+	m := NewModel(5, false, nil)
+	m.state = stateProgress
+	m.shuttingDown = true
+	m.steps = make([]stepItem, 5)
+	labels := stepLabels()
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: labels[i], status: StepPending}
+	}
+
+	msg := StepUpdateMsg{Index: 0, Status: StepFailed, Detail: "server error"}
+	updated, _ := m.Update(msg)
+
+	if updated.(Model).err != nil {
+		t.Error("StepFailed during shutdown should not set m.err")
+	}
+	if updated.(Model).steps[0].status != StepFailed {
+		t.Error("step 0 should still be StepFailed")
+	}
+}
+
+func TestAllStepsDoneInShutdownTransitionsToDone(t *testing.T) {
+	m := NewModel(5, false, nil)
+	m.state = stateProgress
+	m.shuttingDown = true
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepDone}
+	}
+	m.steps[2].status = StepInterrupted
+
+	done := allStepsDoneMsg{}
+	updated, cmd := m.Update(done)
+
+	if updated.(Model).state != stateProgress {
+		t.Errorf("state = %v, want stateProgress (view preserved) in shutdown mode", updated.(Model).state)
+	}
+	if !updated.(Model).quitting {
+		t.Error("should set quitting in shutdown mode")
+	}
+	if cmd == nil {
+		t.Error("should return tea.Quit in shutdown mode")
+	}
+}
+
+func TestShutdownFlowInterruptCleanupDone(t *testing.T) {
+	m := NewModel(5, false, nil)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	labels := stepLabels()
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: labels[i], status: StepPending}
+	}
+	m.steps[0].status = StepDone
+	m.steps[1].status = StepDone
+	m.steps[2].status = StepRunning
+
+	interrupted := StepUpdateMsg{Index: 2, Status: StepInterrupted, Detail: "Interrupted by user"}
+	updated1, _ := m.Update(interrupted)
+
+	if updated1.(Model).steps[2].status != StepInterrupted {
+		t.Error("step 2 should be interrupted")
+	}
+	if !updated1.(Model).shuttingDown {
+		t.Error("should enter shutdown mode")
+	}
+
+	cleanup1 := StepUpdateMsg{Index: 3, Status: StepRunning}
+	updated2, _ := updated1.(Model).Update(cleanup1)
+	cleanup1Done := StepUpdateMsg{Index: 3, Status: StepDone}
+	updated3, _ := updated2.(Model).Update(cleanup1Done)
+
+	cleanup2 := StepUpdateMsg{Index: 4, Status: StepRunning}
+	updated4, _ := updated3.(Model).Update(cleanup2)
+	cleanup2Done := StepUpdateMsg{Index: 4, Status: StepDone}
+	updated5, _ := updated4.(Model).Update(cleanup2Done)
+
+	if updated5.(Model).steps[3].status != StepDone {
+		t.Error("step 3 should be Done (cleanup)")
+	}
+	if updated5.(Model).steps[4].status != StepDone {
+		t.Error("step 4 should be Done (cleanup)")
+	}
+	if updated5.(Model).stepDetail != "Interrupted by user" {
+		t.Errorf("stepDetail should be preserved, got %q", updated5.(Model).stepDetail)
+	}
+
+	done := allStepsDoneMsg{}
+	finalModel, cmd := updated5.(Model).Update(done)
+
+	if finalModel.(Model).state != stateProgress {
+		t.Errorf("state = %v, want stateProgress after shutdown cleanup", finalModel.(Model).state)
+	}
+	if cmd == nil {
+		t.Error("should return tea.Quit after shutdown cleanup")
+	}
+}
+
+func TestCtrlCInProgressWithErrorDoesNotEnterShutdown(t *testing.T) {
+	m := NewModel(5, false, nil)
+	m.state = stateProgress
+	m.err = fmt.Errorf("some error")
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepPending}
+	}
+
+	msg := tea.KeyMsg{Type: tea.KeyCtrlC}
+	updated, _ := m.Update(msg)
+	if !updated.(Model).quitting {
+		t.Error("Ctrl+C with error should quit immediately")
+	}
+	if updated.(Model).shuttingDown {
+		t.Error("Ctrl+C with error should not enter shutdown mode")
+	}
+}
+
+func TestCtrlCWithErrorDuringShutdownDoesNotQuit(t *testing.T) {
+	m := NewModel(5, false, nil)
+	m.state = stateProgress
+	m.shuttingDown = true
+	m.err = fmt.Errorf("some error")
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepPending}
+	}
+
+	ctrlC := tea.KeyMsg{Type: tea.KeyCtrlC}
+	updated, cmd := m.Update(ctrlC)
+	if !updated.(Model).quitting {
+		t.Error("Ctrl+C during shutdown with error should force quit")
+	}
+	if cmd == nil {
+		t.Error("Ctrl+C during shutdown with error should return tea.Quit")
+	}
+}
+
+func TestShutdownFuncCalledOnCtrlC(t *testing.T) {
+	called := false
+	m := NewModel(5, false, func() {
+		called = true
+	})
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: "step", status: StepPending}
+	}
+
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if !called {
+		t.Error("shutdown func should be called on Ctrl+C")
+	}
+}
+
+func TestStepDetailOnlyUpdatedWhenNonEmpty(t *testing.T) {
+	m := NewModel(5, false, nil)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	labels := stepLabels()
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: labels[i], status: StepPending}
+	}
+
+	msgWithDetail := StepUpdateMsg{Index: 0, Status: StepFailed, Detail: "important error"}
+	updated1, _ := m.Update(msgWithDetail)
+	if updated1.(Model).stepDetail != "important error" {
+		t.Error("stepDetail should be set when non-empty")
+	}
+
+	msgEmpty := StepUpdateMsg{Index: 1, Status: StepDone}
+	updated2, _ := updated1.(Model).Update(msgEmpty)
+	if updated2.(Model).stepDetail != "important error" {
+		t.Errorf("stepDetail should be preserved on empty update, got %q", updated2.(Model).stepDetail)
+	}
+}
+
+func TestStepInterruptedRenderedInView(t *testing.T) {
+	m := NewModel(5, false, nil)
+	m.state = stateProgress
+	m.steps = make([]stepItem, 5)
+	labels := stepLabels()
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: labels[i], status: StepDone}
+	}
+	m.steps[2].status = StepInterrupted
+	m.stepDetail = "Interrupted by user"
+
+	v := m.View()
+	if !contains(v, labels[2]) {
+		t.Errorf("view missing interrupted step label: %q", labels[2])
+	}
+	if !contains(v, "Interrupted by user") {
+		t.Errorf("view missing interrupted detail, got: %q", v)
+	}
+}
+
+func TestShutdownProgressViewStaysOnScreen(t *testing.T) {
+	m := NewModel(5, false, nil)
+	m.state = stateProgress
+	m.shuttingDown = true
+	m.quitting = true
+	m.steps = make([]stepItem, 5)
+	labels := stepLabels()
+	for i := range m.steps {
+		m.steps[i] = stepItem{label: labels[i], status: StepDone}
+	}
+	m.steps[2].status = StepInterrupted
+	m.stepDetail = "Interrupted by user"
+
+	v := m.View()
+	if v == "" {
+		t.Error("progress view should not be empty when quitting in shutdown mode")
+	}
+	for _, label := range labels {
+		if !contains(v, label) {
+			t.Errorf("view missing step label when quitting: %q", label)
+		}
+	}
+	if !contains(v, "Interrupted by user") {
+		t.Errorf("view missing detail when quitting, got: %q", v)
 	}
 }

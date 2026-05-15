@@ -123,10 +123,10 @@ func main() {
 	}()
 
 	if isTTY {
-		m := tui.NewModel(int(cfg.SubjectMax), cfg.Quiet)
+		m := tui.NewModel(int(cfg.SubjectMax), cfg.Quiet, cancel)
 		tty, closeTTY := openTTY()
 		defer closeTTY()
-		p := tea.NewProgram(m, tea.WithOutput(tty), tea.WithContext(ctx))
+		p := tea.NewProgram(m, tea.WithOutput(tty), tea.WithContext(context.Background()))
 
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -172,8 +172,13 @@ func main() {
 				var startErr error
 				baseURL, startErr = srv.Start(ctx)
 				if startErr != nil {
-					slog.Error("failed to start server", "error", startErr)
-					p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "OpenCode server failed to start", Err: &opencode.AppError{Op: "server_start", Message: startErr.Error(), Err: startErr}})
+					if errors.Is(startErr, context.Canceled) {
+						slog.Debug("server start cancelled")
+						p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepInterrupted, Detail: "Interrupted by user"})
+					} else {
+						slog.Error("failed to start server", "error", startErr)
+						p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "OpenCode server failed to start", Err: &opencode.AppError{Op: "server_start", Message: startErr.Error(), Err: startErr}})
+					}
 					step0OK = false
 				} else {
 					slog.Info("opencode server started", "url", baseURL)
@@ -192,14 +197,15 @@ func main() {
 				if createErr != nil {
 					if errors.Is(createErr, context.Canceled) {
 						slog.Debug("session creation cancelled", "agent", cfg.Agent)
+						p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepInterrupted, Detail: "Interrupted by user"})
 					} else {
 						slog.Error("failed to create session", "agent", cfg.Agent, "error", createErr)
+						var createAppErr *opencode.AppError
+						if !errors.As(createErr, &createAppErr) {
+							createAppErr = &opencode.AppError{Op: "create_session", Message: createErr.Error(), Err: createErr}
+						}
+						p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepFailed, Detail: "Failed to create session", Err: createAppErr})
 					}
-					var createAppErr *opencode.AppError
-					if !errors.As(createErr, &createAppErr) {
-						createAppErr = &opencode.AppError{Op: "create_session", Message: createErr.Error(), Err: createErr}
-					}
-					p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepFailed, Detail: "Failed to create session", Err: createAppErr})
 				} else {
 					p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepDone})
 				}
@@ -221,14 +227,15 @@ func main() {
 				if genErr != nil {
 					if errors.Is(genErr, context.Canceled) {
 						slog.Debug("message generation cancelled")
+						p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepInterrupted, Detail: "Interrupted by user"})
 					} else {
 						slog.Error("failed to generate messages", "error", genErr)
+						var genAppErr *opencode.AppError
+						if !errors.As(genErr, &genAppErr) {
+							genAppErr = &opencode.AppError{Op: "generate_messages", Message: genErr.Error(), Err: genErr}
+						}
+						p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepFailed, Detail: "Failed to generate commit messages", Err: genAppErr})
 					}
-					var genAppErr *opencode.AppError
-					if !errors.As(genErr, &genAppErr) {
-						genAppErr = &opencode.AppError{Op: "generate_messages", Message: genErr.Error(), Err: genErr}
-					}
-					p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepFailed, Detail: "Failed to generate commit messages", Err: genAppErr})
 				} else {
 					p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepDone})
 				}
@@ -266,6 +273,8 @@ func main() {
 
 			cleanupDone = true
 
+			p.Send(tui.AllStepsDone())
+
 			if ctx.Err() != nil {
 				return
 			}
@@ -277,8 +286,6 @@ func main() {
 				items[i] = tui.CommitItem{Subject: msg.Subject, Body: msg.Body}
 			}
 			p.Send(tui.SetMessages(items))
-
-			p.Send(tui.AllStepsDone())
 		}()
 
 		finalModel, err := p.Run()

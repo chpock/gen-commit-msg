@@ -35,6 +35,7 @@ const (
 	StepFailed
 	StepWarning
 	StepSkipped
+	StepInterrupted
 )
 
 type stepItem struct {
@@ -83,9 +84,12 @@ type Model struct {
 	height     int
 	steps      []stepItem
 	stepDetail string
+
+	shuttingDown bool
+	shutdown     func()
 }
 
-func NewModel(subjectMax int, quiet bool) Model {
+func NewModel(subjectMax int, quiet bool, shutdown func()) Model {
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
 
@@ -111,6 +115,7 @@ func NewModel(subjectMax int, quiet bool) Model {
 		steps:      steps,
 		subjectMax: subjectMax,
 		quiet:      quiet,
+		shutdown:   shutdown,
 	}
 }
 
@@ -146,15 +151,23 @@ func AllStepsDone() tea.Msg {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if m.state == stateProgress && m.err != nil {
+		if m.state == stateProgress && m.err != nil && !m.shuttingDown {
 			m.quitting = true
 			return m, tea.Quit
 		}
 		switch msg.Type {
 		case tea.KeyCtrlC:
+			if m.shuttingDown {
+				slog.Info("forced shutdown on second Ctrl+C")
+				m.quitting = true
+				return m, tea.Quit
+			}
 			slog.Info("received SIGINT, initiating graceful shutdown")
-			m.quitting = true
-			return m, tea.Quit
+			m.shuttingDown = true
+			if m.shutdown != nil {
+				m.shutdown()
+			}
+			return m, nil
 		case tea.KeyEsc:
 			if m.state == stateResult {
 				m.selected = ""
@@ -216,16 +229,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state == stateProgress {
 			if msg.Index >= 0 && msg.Index < len(m.steps) {
 				m.steps[msg.Index].status = msg.Status
-				m.stepDetail = msg.Detail
+				if msg.Detail != "" {
+					m.stepDetail = msg.Detail
+				}
 			} else {
 				slog.Warn("step update with out-of-bounds index", "index", msg.Index, "len", len(m.steps))
 			}
-			if msg.Status == StepFailed {
+			if msg.Status == StepFailed && !m.shuttingDown {
 				m.err = fmt.Errorf("%s", msg.Detail)
 				if msg.Err != nil {
 					m.appErr = msg.Err
 				}
 				slog.Debug("step failure", "index", msg.Index, "detail", msg.Detail)
+			}
+			if msg.Status == StepInterrupted {
+				m.shuttingDown = true
+				slog.Debug("step interrupted", "index", msg.Index)
 			}
 			if msg.Status == StepWarning {
 				slog.Debug("step warning", "index", msg.Index, "detail", msg.Detail)
@@ -234,13 +253,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case allStepsDoneMsg:
 		if m.state == stateProgress {
+			if m.shuttingDown {
+				m.quitting = true
+				return m, tea.Quit
+			}
 			if m.err != nil {
 				m.state = stateError
 				m.quitting = true
 				return m, tea.Quit
-			} else {
-				m.state = stateResult
 			}
+			m.state = stateResult
 			return m, nil
 		}
 	}
@@ -304,6 +326,8 @@ func (m Model) renderSteps(b *strings.Builder) {
 		case StepDone:
 			b.WriteString(doneIcon("✓"))
 		case StepFailed:
+			b.WriteString(failIcon("✗"))
+		case StepInterrupted:
 			b.WriteString(failIcon("✗"))
 		case StepWarning:
 			b.WriteString(warnIcon("⚠"))

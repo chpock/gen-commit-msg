@@ -200,6 +200,7 @@ func TestParseFlagsOutputEnvVar(t *testing.T) {
 
 func TestParseFlagsOutputDefault(t *testing.T) {
 	os.Args = []string{"gen-commit-msg"}
+	t.Setenv("GCM_OUTPUT", "")
 	cfg, err := ParseFlags()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

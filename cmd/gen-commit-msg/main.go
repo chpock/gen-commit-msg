@@ -306,11 +306,21 @@ func main() {
 		}
 		selected := m.SelectedMessage()
 		writer, closeWriter := resolveOutputWriter(cfg.Output)
+		if writer == nil {
+			slog.Error("failed to open output file", "path", cfg.Output)
+			fmtError("Error: failed to open output file %q: %v\n", cfg.Output, closeWriter())
+			pauseExit(1, true)
+		}
 		wrote, writeErr := writeSelectedMessage(writer, selected)
-		closeWriter()
 		if writeErr != nil {
-			slog.Error("failed to write selected message", "error", writeErr)
-			fmtError("Error: failed to write selected message: %v\n", writeErr)
+			slog.Error("failed to write output file", "path", cfg.Output, "error", writeErr)
+			fmtError("Error: failed to write output file %q: %v\n", cfg.Output, writeErr)
+			_ = closeWriter()
+			pauseExit(1, true)
+		}
+		if err := closeWriter(); err != nil {
+			slog.Error("failed to close output file", "path", cfg.Output, "error", err)
+			fmtError("Error: failed to write output file %q: %v\n", cfg.Output, err)
 			pauseExit(1, true)
 		}
 		if wrote {
@@ -384,25 +394,34 @@ func main() {
 		}
 		if len(messages) > 0 {
 			writer, closeWriter := resolveOutputWriter(cfg.Output)
+			if writer == nil {
+				slog.Error("failed to open output file", "path", cfg.Output)
+				fmtError("Error: failed to open output file %q: %v\n", cfg.Output, closeWriter())
+				cleanup()
+				pauseExit(1, true)
+			}
 			fmt.Fprintln(writer, formatMessageFromOC(messages[0]))
-			closeWriter()
+			if err := closeWriter(); err != nil {
+				slog.Error("failed to close output file", "path", cfg.Output, "error", err)
+				fmtError("Error: failed to write output file %q: %v\n", cfg.Output, err)
+				cleanup()
+				pauseExit(1, true)
+			}
 		}
 		pauseExit(0, false)
 	}
 
 }
 
-func resolveOutputWriter(path string) (io.WriteCloser, func()) {
+func resolveOutputWriter(path string) (io.WriteCloser, func() error) {
 	if path == "" {
-		return os.Stdout, func() {}
+		return os.Stdout, func() error { return nil }
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		slog.Error("failed to open output file", "path", path, "error", err)
-		fmt.Fprintf(os.Stderr, "Error: failed to open output file %q: %v\n", path, err)
-		os.Exit(1)
+		return nil, func() error { return err }
 	}
-	return f, func() { _ = f.Close() }
+	return f, func() error { return f.Close() }
 }
 
 func isTerminal() bool {

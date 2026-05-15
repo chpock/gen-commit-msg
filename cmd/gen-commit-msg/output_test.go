@@ -40,7 +40,9 @@ func TestResolveOutputWriterStdout(t *testing.T) {
 	if w != os.Stdout {
 		t.Error("expected os.Stdout when output path is empty")
 	}
-	closer() // must not panic
+	if err := closer(); err != nil {
+		t.Errorf("closer returned unexpected error: %v", err)
+	}
 }
 
 func TestResolveOutputWriterFile(t *testing.T) {
@@ -49,11 +51,16 @@ func TestResolveOutputWriterFile(t *testing.T) {
 	if w == os.Stdout {
 		t.Error("expected file writer, got os.Stdout")
 	}
+	if w == nil {
+		t.Fatal("writer is nil — resolveOutputWriter failed")
+	}
 	_, err := fmt.Fprintln(w, "hello")
 	if err != nil {
 		t.Fatalf("write failed: %v", err)
 	}
-	closer()
+	if err := closer(); err != nil {
+		t.Fatalf("close failed: %v", err)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read back failed: %v", err)

@@ -11,6 +11,12 @@ Surfaces: cli-only
 | `--output` / `-o <path>` | **new** | Write the selected commit message to `<path>` instead of stdout |
 | All existing flags | unchanged | No behavior change |
 
+### Environment variables
+
+| Variable | Equivalent flag | Description |
+|---|---|---|
+| `GCM_OUTPUT` | `--output` | Write the selected commit message to file instead of stdout |
+
 ## Help / usage text
 
 The new flag appears in `--help` output as:
@@ -65,3 +71,4 @@ The new file-write failures exit with code 1, consistent with all other runtime 
 ## Approvals
 
 UX spec approved - round 1 - 2026-05-15
+UX spec updated - round 2 - 2026-05-15 (added GCM_OUTPUT env var table)

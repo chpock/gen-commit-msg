@@ -3,6 +3,9 @@ package tui
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 func TestResolveSelectionColorMode(t *testing.T) {
@@ -64,14 +67,25 @@ func TestConventionalPrefixMatch(t *testing.T) {
 }
 
 func TestRenderSelectedSubjectColorizedPrefix(t *testing.T) {
-	out := renderSelectedSubject("fix(scope)!: parser", true)
-	for _, token := range []string{"(", ")", ":", "!"} {
-		if !strings.Contains(out, token) {
-			t.Fatalf("expected token %q in rendered output", token)
-		}
+	previousProfile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	t.Cleanup(func() {
+		lipgloss.SetColorProfile(previousProfile)
+	})
+
+	subject := "fix(scope)!: parser: v2 (fast)!"
+	out := renderSelectedSubject(subject, true)
+
+	if out == subject {
+		t.Fatal("expected rendered output to be styled when enabled")
 	}
-	if !strings.Contains(out, "parser") {
-		t.Fatal("expected remainder text preserved")
+
+	if !strings.Contains(out, "\x1b[") {
+		t.Fatal("expected ANSI styling sequences when enabled")
+	}
+
+	if !strings.Contains(out, "parser: v2 (fast)!") {
+		t.Fatal("expected remainder punctuation to stay plain and contiguous")
 	}
 }
 

@@ -76,21 +76,33 @@ func isASCIISpace(b byte) bool {
 }
 
 func conventionalPrefixMatch(subject string) bool {
-	return reBang.MatchString(subject) || reScope.MatchString(subject) || reSimple.MatchString(subject)
+	_, ok := conventionalPrefixEnd(subject)
+	return ok
+}
+
+func conventionalPrefixEnd(subject string) (int, bool) {
+	for _, re := range []*regexp.Regexp{reBang, reScope, reSimple} {
+		if idx := re.FindStringIndex(subject); idx != nil {
+			return idx[1], true
+		}
+	}
+
+	return 0, false
 }
 
 func renderSelectedSubject(subject string, enableColors bool) string {
-	if !enableColors || !conventionalPrefixMatch(subject) {
+	prefixEnd, ok := conventionalPrefixEnd(subject)
+	if !enableColors || !ok {
 		return subject
 	}
 	punctGray := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	punctRed := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 	selected := lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
 
-	r := subject
+	r := subject[:prefixEnd]
 	r = strings.ReplaceAll(r, "!", punctRed.Render("!"))
 	r = strings.ReplaceAll(r, "(", punctGray.Render("("))
 	r = strings.ReplaceAll(r, ")", punctGray.Render(")"))
 	r = strings.ReplaceAll(r, ":", punctGray.Render(":"))
-	return selected.Render(r)
+	return selected.Render(r + subject[prefixEnd:])
 }

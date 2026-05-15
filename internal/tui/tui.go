@@ -408,6 +408,18 @@ type commitItemDelegate struct {
 	decision selectionColorDecision
 }
 
+var selectedMarkerStyle = lipgloss.NewStyle().Foreground(lipgloss.CompleteColor{ANSI: "39"}).Bold(true)
+
+func renderSelectedMarker() string {
+	marker := selectedMarkerStyle.Render("> ")
+	if strings.HasPrefix(marker, "\x1b[") {
+		if end := strings.Index(marker, "m"); end > 2 {
+			return "\x1b[1;39m" + marker[end+1:]
+		}
+	}
+	return marker
+}
+
 func newCommitDelegate() list.ItemDelegate {
 	d := list.NewDefaultDelegate()
 	d.SetSpacing(0)
@@ -439,7 +451,7 @@ func (d commitItemDelegate) Render(w io.Writer, m list.Model, index int, item li
 		return
 	}
 
-	marker := "\x1b[1;39m> \x1b[0m"
+	marker := renderSelectedMarker()
 	renderedSubject := renderSelectedSubject(ci.Subject, true)
 	_, _ = fmt.Fprint(w, marker+renderedSubject)
 }

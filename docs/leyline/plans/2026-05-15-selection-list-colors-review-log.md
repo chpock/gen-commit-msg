@@ -637,3 +637,16 @@ All Plan Task 5 steps verified:
 - Step 3: State-matrix observations recorded; all cells match UX spec.
 - Step 4: Accessibility evidence concrete and auditable (arrow-key test, keyboard-flow tests, color-independence, diagnostics safety).
 - Step 5: Reconciliation verdict: no divergence after D1/D2 fixes.
+
+## Task 6 — make all verification
+
+```
+go fmt ./...          PASS
+go vet ./...          PASS
+golangci-lint run ./...  0 issues
+go test -count=1 -race ./...  all 9 packages OK
+go build -ldflags "-X main.version=dev" -o gen-commit-msg ./cmd/gen-commit-msg  PASS
+```
+
+All plan tasks complete. Branch `feat/selection-list-colors` is ready for Stage 7
+branch-level review.

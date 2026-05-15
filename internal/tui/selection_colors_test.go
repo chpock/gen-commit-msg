@@ -1,6 +1,9 @@
 package tui
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestResolveSelectionColorMode(t *testing.T) {
 	tests := []struct {
@@ -36,5 +39,46 @@ func TestResolveSelectionColorMode(t *testing.T) {
 				t.Fatalf("envNormalized=%q want=%q", got.envNormalized, tc.wantNorm)
 			}
 		})
+	}
+}
+
+func TestConventionalPrefixMatch(t *testing.T) {
+	tests := []struct {
+		subject string
+		match   bool
+	}{
+		{subject: "fix: bug", match: true},
+		{subject: "fix(scope): bug", match: true},
+		{subject: "fix(scope)!: bug", match: true},
+		{subject: "Fix(scope): bug", match: false},
+		{subject: "fix(scope_name): bug", match: false},
+		{subject: "fix(scope.name): bug", match: false},
+		{subject: "prefix fix: bug", match: false},
+	}
+
+	for _, tc := range tests {
+		if got := conventionalPrefixMatch(tc.subject); got != tc.match {
+			t.Fatalf("subject=%q match=%v want=%v", tc.subject, got, tc.match)
+		}
+	}
+}
+
+func TestRenderSelectedSubjectColorizedPrefix(t *testing.T) {
+	out := renderSelectedSubject("fix(scope)!: parser", true)
+	for _, token := range []string{"(", ")", ":", "!"} {
+		if !strings.Contains(out, token) {
+			t.Fatalf("expected token %q in rendered output", token)
+		}
+	}
+	if !strings.Contains(out, "parser") {
+		t.Fatal("expected remainder text preserved")
+	}
+}
+
+func TestRenderSelectedSubjectFallbackPlainText(t *testing.T) {
+	subject := "fix(scope)!: parser"
+	out := renderSelectedSubject(subject, false)
+	if out != subject {
+		t.Fatalf("got %q want %q", out, subject)
 	}
 }

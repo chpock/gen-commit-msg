@@ -1,5 +1,18 @@
 package tui
 
+import (
+	"regexp"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+var (
+	reSimple = regexp.MustCompile(`^[a-z]+:`)
+	reScope  = regexp.MustCompile(`^[a-z]+\([a-z0-9-]+\):`)
+	reBang   = regexp.MustCompile(`^[a-z]+\([a-z0-9-]+\)!:`)
+)
+
 type capabilityClass string
 
 const (
@@ -60,4 +73,24 @@ func trimASCIISpace(s string) string {
 
 func isASCIISpace(b byte) bool {
 	return b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == '\f' || b == '\v'
+}
+
+func conventionalPrefixMatch(subject string) bool {
+	return reBang.MatchString(subject) || reScope.MatchString(subject) || reSimple.MatchString(subject)
+}
+
+func renderSelectedSubject(subject string, enableColors bool) string {
+	if !enableColors || !conventionalPrefixMatch(subject) {
+		return subject
+	}
+	punctGray := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	punctRed := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	selected := lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+
+	r := subject
+	r = strings.ReplaceAll(r, "!", punctRed.Render("!"))
+	r = strings.ReplaceAll(r, "(", punctGray.Render("("))
+	r = strings.ReplaceAll(r, ")", punctGray.Render(")"))
+	r = strings.ReplaceAll(r, ":", punctGray.Render(":"))
+	return selected.Render(r)
 }

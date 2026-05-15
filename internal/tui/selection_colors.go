@@ -74,15 +74,22 @@ func logSelectionColorDecision(logger *slog.Logger, d selectionColorDecision) {
 	if logger == nil {
 		return
 	}
-	logger.Debug(
+	logger.Info(
 		"selection color mode decision",
 		"mode", string(d.mode),
-		"capability", string(d.capability),
+		"source", "delegate_render",
+		"selected_row_styling", "colorized",
+		"capability_class", string(d.capability),
 		"env_raw_present", d.envRawPresent,
-		"env_normalized", d.envNormalized,
-		"env_recognized", d.envRecognized,
-		"warn_invalid_toggle", d.warnInvalidToggle,
+		"env_normalized_value", d.envNormalized,
+		"env_recognized_toggle", d.envRecognized,
 	)
+	if d.warnInvalidToggle {
+		logger.Warn(
+			"selection color toggle value is not recognized; using default behavior",
+			"env_normalized_value", d.envNormalized,
+		)
+	}
 }
 
 func trimASCIISpace(s string) string {

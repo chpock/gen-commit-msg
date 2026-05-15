@@ -121,46 +121,96 @@ func TestRenderSelectedSubjectFallbackPlainText(t *testing.T) {
 }
 
 func TestLogSelectionColorDecisionFields(t *testing.T) {
-	h := &captureHandler{}
-	logger := slog.New(h)
+	t.Run("info record includes required mode fields", func(t *testing.T) {
+		h := &captureHandler{}
+		logger := slog.New(h)
 
-	d := selectionColorDecision{
-		mode:              modeDisabledCapability,
-		capability:        capabilityDegraded,
-		envRawPresent:     true,
-		envNormalized:     "invalid",
-		envRecognized:     false,
-		warnInvalidToggle: true,
-	}
+		d := selectionColorDecision{
+			mode:          modeDisabledCapability,
+			capability:    capabilityDegraded,
+			envRawPresent: true,
+			envNormalized: "invalid",
+			envRecognized: false,
+		}
 
-	logSelectionColorDecision(logger, d)
+		logSelectionColorDecision(logger, d)
 
-	if len(h.records) != 1 {
-		t.Fatalf("records=%d want=1", len(h.records))
-	}
+		if len(h.records) < 1 {
+			t.Fatalf("records=%d want>=1", len(h.records))
+		}
 
-	got := map[string]any{}
-	h.records[0].Attrs(func(a slog.Attr) bool {
-		got[a.Key] = a.Value.Any()
-		return true
+		info := h.records[0]
+		if info.Level != slog.LevelInfo {
+			t.Fatalf("level=%v want=%v", info.Level, slog.LevelInfo)
+		}
+		if info.Message != "selection color mode decision" {
+			t.Fatalf("message=%q want=%q", info.Message, "selection color mode decision")
+		}
+
+		got := map[string]any{}
+		info.Attrs(func(a slog.Attr) bool {
+			got[a.Key] = a.Value.Any()
+			return true
+		})
+
+		if got["mode"] != string(d.mode) {
+			t.Fatalf("mode=%v want=%q", got["mode"], d.mode)
+		}
+		if got["source"] != "delegate_render" {
+			t.Fatalf("source=%v want=%q", got["source"], "delegate_render")
+		}
+		if got["selected_row_styling"] != "colorized" {
+			t.Fatalf("selected_row_styling=%v want=%q", got["selected_row_styling"], "colorized")
+		}
+		if got["capability_class"] != string(d.capability) {
+			t.Fatalf("capability_class=%v want=%q", got["capability_class"], d.capability)
+		}
+		if got["env_raw_present"] != d.envRawPresent {
+			t.Fatalf("env_raw_present=%v want=%v", got["env_raw_present"], d.envRawPresent)
+		}
+		if got["env_normalized_value"] != d.envNormalized {
+			t.Fatalf("env_normalized_value=%v want=%q", got["env_normalized_value"], d.envNormalized)
+		}
+		if got["env_recognized_toggle"] != d.envRecognized {
+			t.Fatalf("env_recognized_toggle=%v want=%v", got["env_recognized_toggle"], d.envRecognized)
+		}
 	})
 
-	if got["mode"] != string(d.mode) {
-		t.Fatalf("mode=%v want=%q", got["mode"], d.mode)
-	}
-	if got["capability"] != string(d.capability) {
-		t.Fatalf("capability=%v want=%q", got["capability"], d.capability)
-	}
-	if got["env_raw_present"] != d.envRawPresent {
-		t.Fatalf("env_raw_present=%v want=%v", got["env_raw_present"], d.envRawPresent)
-	}
-	if got["env_normalized"] != d.envNormalized {
-		t.Fatalf("env_normalized=%v want=%q", got["env_normalized"], d.envNormalized)
-	}
-	if got["env_recognized"] != d.envRecognized {
-		t.Fatalf("env_recognized=%v want=%v", got["env_recognized"], d.envRecognized)
-	}
-	if got["warn_invalid_toggle"] != d.warnInvalidToggle {
-		t.Fatalf("warn_invalid_toggle=%v want=%v", got["warn_invalid_toggle"], d.warnInvalidToggle)
-	}
+	t.Run("warn is emitted for invalid toggle", func(t *testing.T) {
+		h := &captureHandler{}
+		logger := slog.New(h)
+
+		d := selectionColorDecision{
+			mode:              modeEnabledInvalidEnv,
+			capability:        capabilityANSI,
+			envRawPresent:     true,
+			envNormalized:     "invalid",
+			envRecognized:     false,
+			warnInvalidToggle: true,
+		}
+
+		logSelectionColorDecision(logger, d)
+
+		if len(h.records) < 2 {
+			t.Fatalf("records=%d want>=2", len(h.records))
+		}
+		if h.records[0].Level != slog.LevelInfo {
+			t.Fatalf("first level=%v want=%v", h.records[0].Level, slog.LevelInfo)
+		}
+		if h.records[1].Level != slog.LevelWarn {
+			t.Fatalf("second level=%v want=%v", h.records[1].Level, slog.LevelWarn)
+		}
+		if h.records[1].Message != "selection color toggle value is not recognized; using default behavior" {
+			t.Fatalf("warn message=%q", h.records[1].Message)
+		}
+
+		warnAttrs := map[string]any{}
+		h.records[1].Attrs(func(a slog.Attr) bool {
+			warnAttrs[a.Key] = a.Value.Any()
+			return true
+		})
+		if warnAttrs["env_normalized_value"] != d.envNormalized {
+			t.Fatalf("env_normalized_value=%v want=%q", warnAttrs["env_normalized_value"], d.envNormalized)
+		}
+	})
 }

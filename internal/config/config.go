@@ -55,6 +55,7 @@ func ParseFlags() (*Config, error) {
 	cfg.Version, _ = flags.GetBool("version")
 	cfg.Help, _ = flags.GetBool("help")
 	if cfg.Version || cfg.Help {
+		cfg.LogLevel = "none"
 		slog.Debug("version or help flag set, skipping config resolution")
 		return cfg, nil
 	}

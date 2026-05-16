@@ -87,6 +87,9 @@ func TestParseFlagsVersionEarlyReturn(t *testing.T) {
 	if cfg.SubjectMax != 0 {
 		t.Errorf("SubjectMax = %d, want 0 (env should not be read on early return)", cfg.SubjectMax)
 	}
+	if cfg.LogLevel != "none" {
+		t.Errorf("LogLevel = %q, want none on early return", cfg.LogLevel)
+	}
 }
 
 func TestParseFlagsCLIOverridesEnv(t *testing.T) {

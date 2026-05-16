@@ -268,19 +268,19 @@ func TestStepLabels(t *testing.T) {
 	if len(labels) != 5 {
 		t.Fatalf("expected 5 step labels, got %d", len(labels))
 	}
-	if labels[0] != "Starting OpenCode..." {
+	if labels[0] != "Collecting information about current changes..." {
 		t.Errorf("step 0 label = %q", labels[0])
 	}
-	if labels[1] != "Creating session..." {
+	if labels[1] != "Starting OpenCode..." {
 		t.Errorf("step 1 label = %q", labels[1])
 	}
-	if labels[2] != "Generating commit messages..." {
+	if labels[2] != "Creating session..." {
 		t.Errorf("step 2 label = %q", labels[2])
 	}
-	if labels[3] != "Deleting session..." {
+	if labels[3] != "Generating commit messages..." {
 		t.Errorf("step 3 label = %q", labels[3])
 	}
-	if labels[4] != "Stopping OpenCode server..." {
+	if labels[4] != "Cleaning up OpenCode resources..." {
 		t.Errorf("step 4 label = %q", labels[4])
 	}
 }

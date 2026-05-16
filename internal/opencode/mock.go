@@ -26,6 +26,7 @@ type mockSessionClient struct {
 	deleteErr error
 
 	deleteCalled bool
+	lastPrompt   opencode.SessionPromptParams
 }
 
 var (
@@ -88,6 +89,7 @@ func (m *mockSessionClient) New(ctx context.Context, params opencode.SessionNewP
 }
 
 func (m *mockSessionClient) Prompt(ctx context.Context, sessionID string, params opencode.SessionPromptParams, opts ...option.RequestOption) (*opencode.SessionPromptResponse, error) {
+	m.lastPrompt = params
 	if m.promptErr != nil {
 		return nil, m.promptErr
 	}
@@ -120,4 +122,8 @@ func (m *mockSessionClient) Delete(ctx context.Context, sessionID string, params
 
 func (m *mockSessionClient) DeleteCalled() bool {
 	return m.deleteCalled
+}
+
+func (m *mockSessionClient) LastPrompt() opencode.SessionPromptParams {
+	return m.lastPrompt
 }

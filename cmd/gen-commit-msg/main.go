@@ -138,6 +138,7 @@ func main() {
 			var sessionID string
 			var baseURL string
 			var messages []opencode.CommitMessage
+			var contextJSON string
 			cleanupDone := false
 			defer func() {
 				if cleanupDone {
@@ -159,113 +160,141 @@ func main() {
 
 			time.Sleep(50 * time.Millisecond)
 
-			// Step 0: Starting OpenCode (agent + server + healthcheck).
+			// Step 0: Collecting information about current changes.
 			p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepRunning})
 			step0OK := true
-			if err := agent.Ensure(cfg.Agent, cfg.InstallAgent); err != nil {
-				slog.Error("failed to ensure agent", "error", err)
-				p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "Agent setup failed", Err: &opencode.AppError{Op: "agent_setup", Message: err.Error(), Err: err}})
+			commitContext, collectErr := git.CollectCommitMessageContext(ctx)
+			if collectErr != nil {
+				slog.Error("failed to collect commit message context", "error", collectErr)
+				p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "Failed to collect information about current changes", Err: &opencode.AppError{Op: "collect_git_context", Message: collectErr.Error(), Err: collectErr}})
 				step0OK = false
-			}
-			if step0OK {
-				srv = server.New()
-				var startErr error
-				baseURL, startErr = srv.Start(ctx)
-				if startErr != nil {
-					if errors.Is(startErr, context.Canceled) {
-						slog.Debug("server start cancelled")
-						p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepInterrupted, Detail: "Interrupted by user"})
-					} else {
-						slog.Error("failed to start server", "error", startErr)
-						p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "OpenCode server failed to start", Err: &opencode.AppError{Op: "server_start", Message: startErr.Error(), Err: startErr}})
-					}
+			} else {
+				jsonValue, marshalErr := commitContext.Marshal()
+				if marshalErr != nil {
+					slog.Error("failed to marshal commit message context", "error", marshalErr)
+					p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "Failed to serialize staged changes context", Err: &opencode.AppError{Op: "marshal_git_context", Message: marshalErr.Error(), Err: marshalErr}})
 					step0OK = false
 				} else {
-					slog.Info("opencode server started", "url", baseURL)
+					contextJSON = jsonValue
 					p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepDone})
 				}
 			}
 
-			// Step 1: Creating session (depends on step 0).
+			// Step 1: Starting OpenCode (agent + server + healthcheck).
 			if !step0OK {
 				p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepSkipped})
 			} else {
 				p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepRunning})
+				step1OK := true
+				if err := agent.Ensure(cfg.Agent, cfg.InstallAgent); err != nil {
+					slog.Error("failed to ensure agent", "error", err)
+					p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepFailed, Detail: "Agent setup failed", Err: &opencode.AppError{Op: "agent_setup", Message: err.Error(), Err: err}})
+					step1OK = false
+				}
+				if step1OK {
+					srv = server.New()
+					var startErr error
+					baseURL, startErr = srv.Start(ctx)
+					if startErr != nil {
+						if errors.Is(startErr, context.Canceled) {
+							slog.Debug("server start cancelled")
+							p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepInterrupted, Detail: "Interrupted by user"})
+						} else {
+							slog.Error("failed to start server", "error", startErr)
+							p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepFailed, Detail: "OpenCode server failed to start", Err: &opencode.AppError{Op: "server_start", Message: startErr.Error(), Err: startErr}})
+						}
+						step1OK = false
+					} else {
+						slog.Info("opencode server started", "url", baseURL)
+						p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepDone})
+					}
+				}
+				step0OK = step1OK
+			}
+
+			// Step 2: Creating session.
+			if !step0OK {
+				p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepSkipped})
+			} else {
+				p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepRunning})
 				oc = opencode.NewClient(baseURL, repoDir, cfg.Agent)
 				var createErr error
 				sessionID, createErr = oc.CreateSession(ctx, cfg.Agent)
 				if createErr != nil {
 					if errors.Is(createErr, context.Canceled) {
 						slog.Debug("session creation cancelled", "agent", cfg.Agent)
-						p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepInterrupted, Detail: "Interrupted by user"})
+						p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepInterrupted, Detail: "Interrupted by user"})
 					} else {
 						slog.Error("failed to create session", "agent", cfg.Agent, "error", createErr)
 						var createAppErr *opencode.AppError
 						if !errors.As(createErr, &createAppErr) {
 							createAppErr = &opencode.AppError{Op: "create_session", Message: createErr.Error(), Err: createErr}
 						}
-						p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepFailed, Detail: "Failed to create session", Err: createAppErr})
-					}
-				} else {
-					p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepDone})
-				}
-			}
-
-			// Step 2: Generating commit messages (depends on step 1).
-			sessionOK := step0OK && sessionID != ""
-			var genErr error
-			if !sessionOK {
-				p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepSkipped})
-			} else {
-				p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepRunning})
-				genParams := opencode.GenerateParams{
-					SubjectMin: int(cfg.SubjectMin),
-					SubjectMax: int(cfg.SubjectMax),
-					Body:       cfg.Body,
-				}
-				var genErr error
-				messages, genErr = oc.GenerateMessages(ctx, sessionID, genParams)
-				if genErr != nil {
-					if errors.Is(genErr, context.Canceled) {
-						slog.Debug("message generation cancelled")
-						p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepInterrupted, Detail: "Interrupted by user"})
-					} else {
-						slog.Error("failed to generate messages", "error", genErr)
-						var genAppErr *opencode.AppError
-						if !errors.As(genErr, &genAppErr) {
-							genAppErr = &opencode.AppError{Op: "generate_messages", Message: genErr.Error(), Err: genErr}
-						}
-						p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepFailed, Detail: "Failed to generate commit messages", Err: genAppErr})
+						p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepFailed, Detail: "Failed to create session", Err: createAppErr})
 					}
 				} else {
 					p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepDone})
 				}
 			}
 
-			// Step 3: Deleting session (depends on step 1 — session must exist).
-			if sessionID != "" && oc != nil {
+			// Step 3: Generating commit messages.
+			sessionOK := step0OK && sessionID != ""
+			var genErr error
+			if !sessionOK {
+				p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepSkipped})
+			} else {
 				p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepRunning})
-				delCtx, delCancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer delCancel()
-				if err := oc.DeleteSession(delCtx, sessionID); err != nil {
-					slog.Warn("failed to delete session", "session_id", sessionID, "error", err)
-					p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepWarning, Detail: "Cleanup issue: " + err.Error()})
+				genParams := opencode.GenerateParams{
+					SubjectMin:  int(cfg.SubjectMin),
+					SubjectMax:  int(cfg.SubjectMax),
+					Body:        cfg.Body,
+					ContextJSON: contextJSON,
+				}
+				messages, genErr = oc.GenerateMessages(ctx, sessionID, genParams)
+				if genErr != nil {
+					if errors.Is(genErr, context.Canceled) {
+						slog.Debug("message generation cancelled")
+						p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepInterrupted, Detail: "Interrupted by user"})
+					} else {
+						slog.Error("failed to generate messages", "error", genErr)
+						var genAppErr *opencode.AppError
+						if !errors.As(genErr, &genAppErr) {
+							genAppErr = &opencode.AppError{Op: "generate_messages", Message: genErr.Error(), Err: genErr}
+						}
+						p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepFailed, Detail: "Failed to generate commit messages", Err: genAppErr})
+					}
 				} else {
-					slog.Info("session deleted", "id", sessionID)
 					p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepDone})
 				}
-			} else {
-				p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepSkipped})
 			}
 
-			// Step 4: Stopping OpenCode server (depends on step 0 — srv must exist).
-			if srv != nil {
+			// Step 4: Cleaning up OpenCode resources.
+			if sessionID != "" || srv != nil {
 				p.Send(tui.StepUpdateMsg{Index: 4, Status: tui.StepRunning})
-				if err := srv.Stop(); err != nil {
-					slog.Warn("failed to stop server", "error", err)
-					p.Send(tui.StepUpdateMsg{Index: 4, Status: tui.StepWarning, Detail: "Cleanup issue: " + err.Error()})
+				cleanupWarn := ""
+				if sessionID != "" && oc != nil {
+					delCtx, delCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer delCancel()
+					if err := oc.DeleteSession(delCtx, sessionID); err != nil {
+						slog.Warn("failed to delete session", "session_id", sessionID, "error", err)
+						cleanupWarn = "Cleanup issue: " + err.Error()
+					} else {
+						slog.Info("session deleted", "id", sessionID)
+					}
+				}
+				if srv != nil {
+					if err := srv.Stop(); err != nil {
+						slog.Warn("failed to stop server", "error", err)
+						if cleanupWarn == "" {
+							cleanupWarn = "Cleanup issue: " + err.Error()
+						}
+					} else {
+						slog.Info("server stopped")
+					}
+				}
+				if cleanupWarn != "" {
+					p.Send(tui.StepUpdateMsg{Index: 4, Status: tui.StepWarning, Detail: cleanupWarn})
 				} else {
-					slog.Info("server stopped")
 					p.Send(tui.StepUpdateMsg{Index: 4, Status: tui.StepDone})
 				}
 			} else {
@@ -345,6 +374,20 @@ func main() {
 	}
 
 	// Ensure agent prompt file exists.
+	commitContext, err := git.CollectCommitMessageContext(ctx)
+	if err != nil {
+		slog.Error("failed to collect commit message context", "error", err)
+		fmtError("Error: failed to collect information about current changes: %s\n", err.Error())
+		pauseExit(1, true)
+	}
+	contextJSON, err := commitContext.Marshal()
+	if err != nil {
+		slog.Error("failed to marshal commit message context", "error", err)
+		fmtError("Error: failed to serialize staged changes context: %s\n", err.Error())
+		pauseExit(1, true)
+	}
+
+	// Ensure agent prompt file exists.
 	if err := agent.Ensure(cfg.Agent, cfg.InstallAgent); err != nil {
 		slog.Error("failed to ensure agent", "error", err)
 		fmtError("Error: failed to ensure agent: %s\n", err.Error())
@@ -386,9 +429,10 @@ func main() {
 		pauseExit(1, true)
 	}
 	genParams := opencode.GenerateParams{
-		SubjectMin: int(cfg.SubjectMin),
-		SubjectMax: int(cfg.SubjectMax),
-		Body:       cfg.Body,
+		SubjectMin:  int(cfg.SubjectMin),
+		SubjectMax:  int(cfg.SubjectMax),
+		Body:        cfg.Body,
+		ContextJSON: contextJSON,
 	}
 
 	if !isTTY && cfg.SubjectMax == 1 {

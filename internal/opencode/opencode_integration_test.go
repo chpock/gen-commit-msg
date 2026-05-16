@@ -2,6 +2,7 @@ package opencode
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -80,6 +81,33 @@ func TestClient_GenerateMessages_Success_NoBody(t *testing.T) {
 	}
 	if msgs[0].Body != "" {
 		t.Errorf("expected empty body, got %q", msgs[0].Body)
+	}
+}
+
+func TestClient_GenerateMessages_PromptIncludesCommitContextJSON(t *testing.T) {
+	mock := newMockSession().WithPromptFixture("prompt_success_basic.json")
+	client := newClientWithSession(mock, "/tmp/repo", "test-agent")
+
+	_, err := client.GenerateMessages(context.Background(), "sess_001", GenerateParams{
+		SubjectMin:  1,
+		SubjectMax:  1,
+		Body:        true,
+		ContextJSON: "{\"format_version\":\"1.0\"}",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	encoded, err := json.Marshal(mock.LastPrompt())
+	if err != nil {
+		t.Fatalf("failed to marshal recorded prompt: %v", err)
+	}
+	promptJSON := string(encoded)
+	if !strings.Contains(promptJSON, "commit_message_context_json") {
+		t.Fatalf("prompt payload does not contain context tag: %s", promptJSON)
+	}
+	if !strings.Contains(promptJSON, `\"format_version\":\"1.0\"`) {
+		t.Fatalf("prompt payload does not contain provided context json: %s", promptJSON)
 	}
 }
 

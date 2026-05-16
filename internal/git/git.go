@@ -6,14 +6,24 @@ import (
 )
 
 func IsRepo() bool {
-	isRepo := exec.Command("git", "rev-parse", "--git-dir").Run() == nil
+	args, err := buildExecutionArgs([]string{"git", "rev-parse", "--git-dir"})
+	if err != nil {
+		slog.Error("failed to build git repo check args", "error", err)
+		return false
+	}
+	isRepo := exec.Command("git", args...).Run() == nil
 	slog.Debug("git repo check", "is_repo", isRepo)
 	return isRepo
 }
 
 func HasStagedFiles() (bool, error) {
-	cmd := exec.Command("git", "diff", "--staged", "--quiet")
-	err := cmd.Run()
+	args, err := buildExecutionArgs([]string{"git", "diff", "--staged", "--quiet"})
+	if err != nil {
+		slog.Error("failed to build git staged check args", "error", err)
+		return false, err
+	}
+	cmd := exec.Command("git", args...)
+	err = cmd.Run()
 	if err == nil {
 		slog.Debug("git staged check", "has_staged", false)
 		return false, nil

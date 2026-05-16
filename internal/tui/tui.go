@@ -52,11 +52,11 @@ type StepUpdateMsg struct {
 
 func stepLabels() [5]string {
 	return [5]string{
+		"Collecting information about current changes...",
 		"Starting OpenCode...",
 		"Creating session...",
 		"Generating commit messages...",
-		"Deleting session...",
-		"Stopping OpenCode server...",
+		"Cleaning up OpenCode resources...",
 	}
 }
 

@@ -4,18 +4,26 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 	"syscall"
 	"time"
 )
+
+type opencodeConfig struct {
+	Snapshot   bool   `json:"snapshot"`
+	Share      string `json:"share"`
+	Autoupdate bool   `json:"autoupdate"`
+}
 
 var (
 	listenURLRe = regexp.MustCompile(`opencode server listening on (http://[^\s]+)`)
@@ -54,6 +62,26 @@ func (s *ProcessServer) Start(ctx context.Context) (string, error) {
 		Pdeathsig: syscall.SIGKILL,
 		Setpgid:   true,
 	}
+
+	cfg := opencodeConfig{
+		// OpenCode's snapshot system (enabled by default) operates above git
+		// and can modify the staging area when GIT_INDEX_FILE is set — which is
+		// the case during commit creation. We disable it since gen-commit-msg
+		// must not modify any files.
+		// See: https://github.com/anomalyco/opencode/issues/9359
+		//      https://github.com/anomalyco/opencode/issues/22477
+		Snapshot:   false,
+		Share:      "disabled",
+		Autoupdate: false,
+	}
+	cfgJSON, err := json.Marshal(cfg)
+	if err != nil {
+		slog.Error("failed to marshal opencode config", "error", err)
+		serverCancel()
+		return "", fmt.Errorf("marshal opencode config: %w", err)
+	}
+	s.cmd.Env = append(os.Environ(), "OPENCODE_CONFIG_CONTENT="+string(cfgJSON))
+	slog.Debug("setting OPENCODE_CONFIG_CONTENT for opencode serve process", "value", string(cfgJSON))
 
 	slog.Info("starting opencode server", "args", s.cmd.Args[1:])
 

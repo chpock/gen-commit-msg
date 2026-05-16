@@ -215,3 +215,41 @@ jobs:
         with:
           files: dist/*
           body_path: RELEASE_NOTES.md
+
+  deploy-aur:
+    needs: publish-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate AUR package files
+        run: |
+          app_version="${GITHUB_REF_NAME#v}"
+          ./dist/scripts/generate-aur-packages.sh "$app_version"
+
+      - name: Deploy gen-commit-msg to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.3
+        with:
+          pkgname: gen-commit-msg
+          pkgbuild: target/aur/gen-commit-msg/PKGBUILD
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ github.ref_name }}"
+          updpkgsums: true
+          test: true
+          test_flags: --clean --syncdeps --noconfirm
+
+      - name: Deploy gen-commit-msg-git to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.3
+        with:
+          pkgname: gen-commit-msg-git
+          pkgbuild: target/aur/gen-commit-msg-git/PKGBUILD
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update PKGBUILD for ${{ github.ref_name }}"
+          test: true
+          test_flags: --clean --syncdeps --noconfirm

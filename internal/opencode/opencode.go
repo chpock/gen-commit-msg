@@ -220,6 +220,10 @@ func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params 
 			slog.String("response", string(respJSON)))
 	}
 
+	if slog.Default().Enabled(ctx, slog.LevelInfo) {
+		logResponseParts(ctx, sessionID, res.Parts)
+	}
+
 	rawJSON, err := getStructuredJSON(res)
 	if err != nil {
 		slog.Error("failed to extract structured output", "session_id", sessionID, "error", err)
@@ -311,6 +315,93 @@ func (c *Client) DeleteSession(ctx context.Context, sessionID string) error {
 	}
 
 	return err
+}
+
+func logResponseParts(ctx context.Context, sessionID string, parts []opencode.Part) {
+	if len(parts) == 0 {
+		return
+	}
+
+	counts := map[string]int{}
+	var totalReasoningChars int
+	var totalReasoningDuration float64
+	var toolParts []string
+
+	for _, part := range parts {
+		counts[string(part.Type)]++
+
+		switch part.Type {
+		case "reasoning":
+			totalReasoningChars += len(part.Text)
+			if t, ok := part.Time.(opencode.ReasoningPartTime); ok {
+				totalReasoningDuration += t.End - t.Start
+			}
+
+			text := part.Text
+			if runes := []rune(text); len(runes) > 200 {
+				text = string(runes[:200]) + "..."
+			}
+			attrs := []slog.Attr{
+				slog.String("session_id", sessionID),
+				slog.String("part_type", string(part.Type)),
+				slog.String("text", text),
+			}
+			if t, ok := part.Time.(opencode.ReasoningPartTime); ok {
+				attrs = append(attrs, slog.Float64("duration_ms", t.End-t.Start))
+			}
+			slog.LogAttrs(ctx, slog.LevelInfo, "opencode response part", attrs...)
+
+		case "tool":
+			status := ""
+			if s, ok := part.State.(opencode.ToolPartState); ok {
+				status = string(s.Status)
+			}
+			toolParts = append(toolParts, fmt.Sprintf("%s(%s)", part.Tool, status))
+			slog.LogAttrs(ctx, slog.LevelInfo, "opencode response part",
+				slog.String("session_id", sessionID),
+				slog.String("part_type", string(part.Type)),
+				slog.String("tool", part.Tool),
+				slog.String("status", status),
+				slog.String("call_id", part.CallID),
+			)
+
+		case "step-start":
+			slog.LogAttrs(ctx, slog.LevelInfo, "opencode response part",
+				slog.String("session_id", sessionID),
+				slog.String("part_type", string(part.Type)),
+			)
+
+		case "step-finish":
+			attrs := []slog.Attr{
+				slog.String("session_id", sessionID),
+				slog.String("part_type", string(part.Type)),
+				slog.String("reason", part.Reason),
+			}
+			if tok, ok := part.Tokens.(opencode.StepFinishPartTokens); ok {
+				attrs = append(attrs,
+					slog.Float64("tokens_input", tok.Input),
+					slog.Float64("tokens_output", tok.Output),
+					slog.Float64("tokens_reasoning", tok.Reasoning),
+				)
+			}
+			slog.LogAttrs(ctx, slog.LevelInfo, "opencode response part", attrs...)
+
+		default:
+			slog.LogAttrs(ctx, slog.LevelInfo, "opencode response part",
+				slog.String("session_id", sessionID),
+				slog.String("part_type", string(part.Type)),
+			)
+		}
+	}
+
+	slog.Info("opencode response parts summary",
+		"session_id", sessionID,
+		"total_parts", len(parts),
+		"by_type", counts,
+		"reasoning_chars", totalReasoningChars,
+		"reasoning_duration_ms", totalReasoningDuration,
+		"tools", toolParts,
+	)
 }
 
 func getStructuredJSON(res *opencode.SessionPromptResponse) ([]byte, error) {

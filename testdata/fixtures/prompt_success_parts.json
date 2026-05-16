@@ -1,0 +1,80 @@
+{
+  "info": {
+    "id": "msg_parts_001",
+    "sessionID": "mock_sess_parts",
+    "role": "assistant",
+    "mode": "gen-commit-msg",
+    "modelID": "deepseek-v4-pro",
+    "providerID": "opencode-go",
+    "parentID": "parent_parts",
+    "path": {"cwd": "/tmp/test-repo", "root": "/tmp/test-repo"},
+    "time": {"created": 1715616002000, "completed": 1715616005000},
+    "tokens": {"input": 400, "output": 50, "reasoning": 1200,
+               "cache": {"read": 0, "write": 0}},
+    "cost": 0.03,
+    "system": [],
+    "structured": "{\"subjects\":[\"feat(config): add --subject-count flag\"],\"body\":\"Added a --subject-count flag to control how many commit message candidates are generated.\"}"
+  },
+  "parts": [
+    {
+      "id": "prt_start_001",
+      "messageID": "msg_parts_001",
+      "sessionID": "mock_sess_parts",
+      "type": "step-start",
+      "snapshot": "abc1234"
+    },
+    {
+      "id": "prt_reason_001",
+      "messageID": "msg_parts_001",
+      "sessionID": "mock_sess_parts",
+      "type": "reasoning",
+      "text": "Analyzing staged changes and considering the commit message format. The diff is small and focused on config.",
+      "time": {"start": 1715616002100, "end": 1715616002500},
+      "metadata": {}
+    },
+    {
+      "id": "prt_reason_002",
+      "messageID": "msg_parts_001",
+      "sessionID": "mock_sess_parts",
+      "type": "reasoning",
+      "text": "Determining commit type and scope. This is a new feature addition to the config module.",
+      "time": {"start": 1715616002500, "end": 1715616003000},
+      "metadata": {}
+    },
+    {
+      "id": "prt_tool_001",
+      "messageID": "msg_parts_001",
+      "sessionID": "mock_sess_parts",
+      "type": "tool",
+      "callID": "call_abc123",
+      "tool": "StructuredOutput",
+      "state": {
+        "status": "completed",
+        "error": "",
+        "input": {
+          "body": "",
+          "subjects": ["feat(config): add --subject-count flag"]
+        },
+        "output": "Structured output captured successfully.",
+        "metadata": {"valid": true},
+        "title": "Structured Output",
+        "time": {"start": 1715616003100, "end": 1715616003102}
+      },
+      "metadata": {}
+    },
+    {
+      "id": "prt_finish_001",
+      "messageID": "msg_parts_001",
+      "sessionID": "mock_sess_parts",
+      "type": "step-finish",
+      "reason": "tool-calls",
+      "snapshot": "abc1234",
+      "tokens": {
+        "input": 400,
+        "output": 50,
+        "reasoning": 1200,
+        "cache": {"read": 0, "write": 0}
+      }
+    }
+  ]
+}

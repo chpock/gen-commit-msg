@@ -1,8 +1,10 @@
 package opencode
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -553,5 +555,308 @@ func TestAppError_Unwrap(t *testing.T) {
 	appErr := &AppError{Op: "test", Err: inner}
 	if !errors.Is(appErr, inner) {
 		t.Error("errors.Is should find inner error via Unwrap")
+	}
+}
+
+type captureHandler struct {
+	records  []slog.Record
+	preAttrs []slog.Attr
+}
+
+func (h *captureHandler) Enabled(context.Context, slog.Level) bool {
+	return true
+}
+
+func (h *captureHandler) Handle(_ context.Context, r slog.Record) error {
+	r.AddAttrs(h.preAttrs...)
+	h.records = append(h.records, r.Clone())
+	return nil
+}
+
+func (h *captureHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	h2 := *h
+	h2.preAttrs = append([]slog.Attr(nil), h.preAttrs...)
+	h2.preAttrs = append(h2.preAttrs, attrs...)
+	return &h2
+}
+
+func (h *captureHandler) WithGroup(string) slog.Handler {
+	return h
+}
+
+func (h *captureHandler) assertRecord(t *testing.T, idx int, msg string, wantAttrs map[string]string) {
+	t.Helper()
+	if idx >= len(h.records) {
+		t.Fatalf("record %d not found (total %d records)", idx, len(h.records))
+	}
+	r := h.records[idx]
+	if r.Message != msg {
+		t.Errorf("record[%d].Message = %q, want %q", idx, r.Message, msg)
+	}
+	r.Attrs(func(a slog.Attr) bool {
+		if want, ok := wantAttrs[a.Key]; ok {
+			got := a.Value.String()
+			if got != want {
+				t.Errorf("record[%d].%s = %q, want %q", idx, a.Key, got, want)
+			}
+			delete(wantAttrs, a.Key)
+		}
+		return true
+	})
+	for k, v := range wantAttrs {
+		t.Errorf("record[%d] missing attr %s (wanted %q)", idx, k, v)
+	}
+}
+
+func TestLogResponseParts_AllTypes(t *testing.T) {
+	fixtureName := "prompt_success_parts.json"
+	res, err := loadPromptFixture(fixtureName)
+	if err != nil {
+		t.Fatalf("failed to load fixture %s: %v", fixtureName, err)
+	}
+
+	h := &captureHandler{}
+	logger := slog.New(h)
+	oldLogger := slog.Default()
+	slog.SetDefault(logger)
+	defer slog.SetDefault(oldLogger)
+
+	logResponseParts(context.Background(), res.Info.SessionID, res.Parts)
+
+	if len(h.records) == 0 {
+		t.Fatal("expected at least one log record")
+	}
+
+	partRecords := 0
+	summaryFound := false
+	for _, r := range h.records {
+		if r.Message == "opencode response part" {
+			partRecords++
+		}
+		if r.Message == "opencode response parts summary" {
+			summaryFound = true
+		}
+	}
+
+	if partRecords != len(res.Parts) {
+		t.Errorf("expected %d part records, got %d", len(res.Parts), partRecords)
+	}
+	if !summaryFound {
+		t.Error("expected summary record")
+	}
+}
+
+func TestLogResponseParts_Empty(t *testing.T) {
+	h := &captureHandler{}
+	logger := slog.New(h)
+	oldLogger := slog.Default()
+	slog.SetDefault(logger)
+	defer slog.SetDefault(oldLogger)
+
+	logResponseParts(context.Background(), "sess_empty", nil)
+
+	if len(h.records) != 0 {
+		t.Errorf("expected 0 records for nil parts, got %d", len(h.records))
+	}
+
+	logResponseParts(context.Background(), "sess_empty", []opencode.Part{})
+
+	if len(h.records) != 0 {
+		t.Errorf("expected 0 records for empty parts, got %d", len(h.records))
+	}
+}
+
+func TestLogResponseParts_ToolPart(t *testing.T) {
+	parts := []opencode.Part{
+		{
+			Type:   opencode.PartType("tool"),
+			Tool:   "StructuredOutput",
+			CallID: "call_test",
+			State: opencode.ToolPartState{
+				Status: opencode.ToolPartStateStatus("completed"),
+			},
+		},
+	}
+
+	h := &captureHandler{}
+	logger := slog.New(h)
+	oldLogger := slog.Default()
+	slog.SetDefault(logger)
+	defer slog.SetDefault(oldLogger)
+
+	logResponseParts(context.Background(), "sess_tool", parts)
+
+	if len(h.records) < 2 {
+		t.Fatalf("expected at least 2 records, got %d", len(h.records))
+	}
+
+	wantAttrs := map[string]string{
+		"session_id": "sess_tool",
+		"part_type":  "tool",
+		"tool":       "StructuredOutput",
+		"status":     "completed",
+		"call_id":    "call_test",
+	}
+	h.assertRecord(t, 0, "opencode response part", wantAttrs)
+}
+
+func TestLogResponseParts_ReasoningPart(t *testing.T) {
+	parts := []opencode.Part{
+		{
+			Type: opencode.PartType("reasoning"),
+			Text: "This is a reasoning text that explains the model's thinking process.",
+			Time: opencode.ReasoningPartTime{Start: 100, End: 400},
+		},
+	}
+
+	h := &captureHandler{}
+	logger := slog.New(h)
+	oldLogger := slog.Default()
+	slog.SetDefault(logger)
+	defer slog.SetDefault(oldLogger)
+
+	logResponseParts(context.Background(), "sess_reason", parts)
+
+	if len(h.records) < 2 {
+		t.Fatalf("expected at least 2 records, got %d", len(h.records))
+	}
+
+	wantAttrs := map[string]string{
+		"session_id": "sess_reason",
+		"part_type":  "reasoning",
+	}
+	h.assertRecord(t, 0, "opencode response part", wantAttrs)
+}
+
+func TestLogResponseParts_ReasoningTextTruncated(t *testing.T) {
+	longText := ""
+	for i := 0; i < 300; i++ {
+		longText += "x"
+	}
+	parts := []opencode.Part{
+		{
+			Type: opencode.PartType("reasoning"),
+			Text: longText,
+			Time: opencode.ReasoningPartTime{Start: 100, End: 500},
+		},
+	}
+
+	h := &captureHandler{}
+	logger := slog.New(h)
+	oldLogger := slog.Default()
+	slog.SetDefault(logger)
+	defer slog.SetDefault(oldLogger)
+
+	logResponseParts(context.Background(), "sess_trunc", parts)
+
+	r := h.records[0]
+	var textFound string
+	r.Attrs(func(a slog.Attr) bool {
+		if a.Key == "text" {
+			textFound = a.Value.String()
+		}
+		return true
+	})
+	if len(textFound) <= 200 {
+		t.Error("expected text longer than 200 chars (before truncation check)")
+	}
+	if !strings.HasSuffix(textFound, "...") && len(longText) > 200 {
+		t.Error("expected text to be truncated with '...' suffix")
+	}
+}
+
+func TestLogResponseParts_StepStartAndFinish(t *testing.T) {
+	parts := []opencode.Part{
+		{
+			Type: opencode.PartType("step-start"),
+		},
+		{
+			Type:   opencode.PartType("step-finish"),
+			Reason: "tool-calls",
+			Tokens: opencode.StepFinishPartTokens{
+				Input:     100,
+				Output:    50,
+				Reasoning: 200,
+				Cache:     opencode.StepFinishPartTokensCache{Read: 0, Write: 0},
+			},
+		},
+	}
+
+	h := &captureHandler{}
+	logger := slog.New(h)
+	oldLogger := slog.Default()
+	slog.SetDefault(logger)
+	defer slog.SetDefault(oldLogger)
+
+	logResponseParts(context.Background(), "sess_steps", parts)
+
+	if len(h.records) < 3 {
+		t.Fatalf("expected at least 3 records (2 parts + summary), got %d", len(h.records))
+	}
+
+	h.assertRecord(t, 0, "opencode response part", map[string]string{
+		"session_id": "sess_steps",
+		"part_type":  "step-start",
+	})
+	h.assertRecord(t, 1, "opencode response part", map[string]string{
+		"session_id": "sess_steps",
+		"part_type":  "step-finish",
+		"reason":     "tool-calls",
+	})
+}
+
+func TestLogResponseParts_Summary(t *testing.T) {
+	parts := []opencode.Part{
+		{
+			Type: opencode.PartType("step-start"),
+		},
+		{
+			Type: opencode.PartType("reasoning"),
+			Text: "Analyzing...",
+			Time: opencode.ReasoningPartTime{Start: 100, End: 300},
+		},
+		{
+			Type:   opencode.PartType("tool"),
+			Tool:   "StructuredOutput",
+			CallID: "call_x",
+			State: opencode.ToolPartState{
+				Status: opencode.ToolPartStateStatus("completed"),
+			},
+		},
+		{
+			Type:   opencode.PartType("step-finish"),
+			Reason: "tool-calls",
+			Tokens: opencode.StepFinishPartTokens{
+				Input:     50,
+				Output:    20,
+				Reasoning: 100,
+				Cache:     opencode.StepFinishPartTokensCache{Read: 0, Write: 0},
+			},
+		},
+	}
+
+	h := &captureHandler{}
+	logger := slog.New(h)
+	oldLogger := slog.Default()
+	slog.SetDefault(logger)
+	defer slog.SetDefault(oldLogger)
+
+	logResponseParts(context.Background(), "sess_summary", parts)
+
+	lastIdx := len(h.records) - 1
+	h.assertRecord(t, lastIdx, "opencode response parts summary", map[string]string{
+		"session_id": "sess_summary",
+	})
+
+	r := h.records[lastIdx]
+	var totalParts int
+	r.Attrs(func(a slog.Attr) bool {
+		if a.Key == "total_parts" {
+			totalParts = int(a.Value.Int64())
+		}
+		return true
+	})
+	if totalParts != 4 {
+		t.Errorf("summary total_parts = %d, want 4", totalParts)
 	}
 }

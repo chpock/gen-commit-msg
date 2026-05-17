@@ -139,7 +139,7 @@ endfunction
 
 augroup GitCommitMapping
     autocmd!
-    autocmd FileType gitcommit nnoremap <buffer> <leader>O :call <SID>GenCommitMsg()<CR>
+    autocmd FileType gitcommit nnoremap <buffer> <Leader>O :call <SID>GenCommitMsg()<CR>
 augroup END
 ```
 

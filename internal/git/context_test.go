@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -79,4 +80,28 @@ func TestCollectCommitMessageContext(t *testing.T) {
 	if !strings.Contains(jsonValue, "\"format_version\": \"1.0\"") {
 		t.Fatalf("marshaled JSON missing format version: %s", jsonValue)
 	}
+}
+
+func TestRecentCommitsCommandSpecUsesConfigurableCount(t *testing.T) {
+	wantArg := fmt.Sprintf("-%d", RecentCommitMessageCount)
+	wantDescription := fmt.Sprintf("Last %d commit messages. Use only as style examples when no explicit repository commit-message instructions are available.", RecentCommitMessageCount)
+
+	for _, spec := range commitContextCommandSpecs {
+		if spec.ID != "recent_commits" {
+			continue
+		}
+
+		if len(spec.Command) < 3 {
+			t.Fatalf("recent_commits command too short: %v", spec.Command)
+		}
+		if spec.Command[2] != wantArg {
+			t.Fatalf("recent_commits command count arg = %q, want %q", spec.Command[2], wantArg)
+		}
+		if spec.Description != wantDescription {
+			t.Fatalf("recent_commits description = %q, want %q", spec.Description, wantDescription)
+		}
+		return
+	}
+
+	t.Fatal("recent_commits command spec not found")
 }

@@ -142,7 +142,7 @@ Use `style_context.outputs` only as weak style hints.
 
 Style-context outputs may include:
 
-- `recent_commits`: Last 5 commit messages. Use only to infer repository commit
+- `recent_commits`: Recent commit messages. Use only to infer repository commit
   message style.
 - `branch`: Current branch name. Use only as weak metadata. It must not
   override staged changes.

@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	MaxContextOutputBytes = 200000
-	truncationStrategy    = "head_tail"
+	MaxContextOutputBytes    = 200000
+	RecentCommitMessageCount = 15
+	truncationStrategy       = "head_tail"
 )
 
 type Truncation struct {
@@ -98,8 +99,8 @@ var commitContextCommandSpecs = []commandSpec{
 	},
 	{
 		ID:          "recent_commits",
-		Command:     []string{"git", "log", "-5", "--format=%H%n%s%n%n%b%n%x1e"},
-		Description: "Last 5 commit messages. Use only as style examples when no explicit repository commit-message instructions are available.",
+		Command:     []string{"git", "log", fmt.Sprintf("-%d", RecentCommitMessageCount), "--format=%H%n%s%n%n%b%n%x1e"},
+		Description: fmt.Sprintf("Last %d commit messages. Use only as style examples when no explicit repository commit-message instructions are available.", RecentCommitMessageCount),
 		Required:    false,
 		Section:     "style_context",
 	},

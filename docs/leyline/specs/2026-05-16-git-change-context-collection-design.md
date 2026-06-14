@@ -34,7 +34,7 @@ receive a structured, high-signal representation of staged changes.
     5. `git diff --cached --dirstat=files,0 --find-renames --find-copies`
     6. `git diff --cached --no-ext-diff --no-color --find-renames --find-copies --submodule=short`
   - style_context:
-    7. `git log -5 --format=%H%n%s%n%n%b%n%x1e`
+    7. `git log -15 --format=%H%n%s%n%n%b%n%x1e`
     8. `git branch --show-current`
 - Each command is executed with these additional git args:
   `--no-pager -c color.ui=false -c core.quotepath=false`.

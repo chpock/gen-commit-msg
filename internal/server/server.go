@@ -205,8 +205,11 @@ func (s *ProcessServer) Stop() error {
 	}
 	if s.cmd != nil && s.cmd.Process != nil {
 		_ = s.cmd.Process.Signal(syscall.SIGTERM)
-		done := make(chan error, 1)
-		go func() { done <- s.cmd.Wait() }()
+		done := make(chan struct{})
+		go func() {
+			_ = s.cmd.Wait()
+			close(done)
+		}()
 		select {
 		case <-done:
 			slog.Info("opencode process exited cleanly")

@@ -479,7 +479,7 @@ func extractHTTPFields(err error) (code int, method, url, body string) {
 		}
 	}
 
-	if f := v.FieldByName("Request"); f.IsValid() && f.Kind() == reflect.Ptr && !f.IsNil() {
+	if f := v.FieldByName("Request"); f.IsValid() && f.Kind() == reflect.Pointer && !f.IsNil() {
 		req := f.Elem()
 		if m := req.FieldByName("Method"); m.IsValid() && m.Kind() == reflect.String {
 			method = m.String()

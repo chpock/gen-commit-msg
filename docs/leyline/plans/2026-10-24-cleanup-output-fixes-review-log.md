@@ -30,3 +30,29 @@ Date: 2026-10-24
 ### Limitations
 
 - The server shutdown protocol and treatment of expected process termination errors are unchanged.
+
+## Non-interactive successful cleanup
+
+### Changes
+
+- Return normally after successful non-interactive output so deferred session deletion, server shutdown, and log closure execute.
+- Add subprocess regression coverage using the actual CLI entry point, real Git fixtures, an HTTP fixture server, and a spawned fake OpenCode executable. Check stdout and file output, exactly one session deletion, and completed server shutdown.
+
+### Independent review and disposition
+
+- Initial review confirmed the production fix and found **P1**: fixture Git commands inherited `GIT_*` variables and could affect an external repository/index.
+- **Accepted and fixed:** use the same filtered environment for fixture Git commands and the CLI subprocess. A regression supplies disposable external Git paths and verifies they remain untouched while the fixture receives its own staged index.
+- A fresh-context follow-up read the repaired helper and retained the production approval: **OK**, no remaining findings.
+- Non-TTY `--pause` is a no-op under the UX contract; removing the previous incidental success pause prompt is consistent with it.
+
+### Validation
+
+- Cleanup regression before the fix: failed for both stdout and file output, with no HTTP DELETE or completed shutdown.
+- Fixture-isolation regression before its repair: failed while staging against the supplied external Git environment.
+- `go test -count=1 -race -run '^Test(NonInteractiveSuccessCleansUp|CLIRepositoryIgnoresGitEnvironment)$' ./cmd/gen-commit-msg/`: passed.
+- `make all`: passed after the fixture repair.
+- `git diff --check`: passed.
+
+### Limitations
+
+- The subprocess tests exercise the CLI, SDK HTTP transport, and process lifecycle with controlled fixtures; they do not invoke a real OpenCode installation or model.

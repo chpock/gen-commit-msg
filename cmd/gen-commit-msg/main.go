@@ -475,7 +475,7 @@ func main() {
 			cleanup()
 			pauseExit(1, true)
 		}
-		pauseExit(0, false)
+		return
 	}
 
 }

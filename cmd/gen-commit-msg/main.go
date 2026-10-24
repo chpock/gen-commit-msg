@@ -346,22 +346,10 @@ func main() {
 			os.Exit(1)
 		}
 		selected := m.SelectedMessage()
-		writer, closeWriter := resolveOutputWriter(cfg.Output)
-		if writer == nil {
-			slog.Error("failed to open output file", "path", cfg.Output)
-			fmtError("Error: failed to open output file %q: %v\n", cfg.Output, closeWriter())
-			pauseExit(1, true)
-		}
-		wrote, writeErr := writeSelectedMessage(writer, selected)
+		wrote, writeErr := writeSelectedMessage(cfg.Output, selected)
 		if writeErr != nil {
-			slog.Error("failed to write output file", "path", cfg.Output, "error", writeErr)
-			fmtError("Error: failed to write output file %q: %v\n", cfg.Output, writeErr)
-			_ = closeWriter()
-			pauseExit(1, true)
-		}
-		if err := closeWriter(); err != nil {
-			slog.Error("failed to close output file", "path", cfg.Output, "error", err)
-			fmtError("Error: failed to write output file %q: %v\n", cfg.Output, err)
+			slog.Error("failed to write selected message", "path", cfg.Output, "error", writeErr)
+			fmtError("Error: %v\n", writeErr)
 			pauseExit(1, true)
 		}
 		if wrote {
@@ -454,24 +442,9 @@ func main() {
 			cleanup()
 			pauseExit(1, true)
 		}
-		writer, closeWriter := resolveOutputWriter(cfg.Output)
-		if writer == nil {
-			slog.Error("failed to open output file", "path", cfg.Output)
-			fmtError("Error: failed to open output file %q: %v\n", cfg.Output, closeWriter())
-			cleanup()
-			pauseExit(1, true)
-		}
-		_, err = fmt.Fprintln(writer, formatMessageFromOC(messages[0]))
-		if err != nil {
-			slog.Error("failed to write output file", "path", cfg.Output, "error", err)
-			fmtError("Error: failed to write output file %q: %v\n", cfg.Output, err)
-			_ = closeWriter()
-			cleanup()
-			pauseExit(1, true)
-		}
-		if err := closeWriter(); err != nil {
-			slog.Error("failed to close output file", "path", cfg.Output, "error", err)
-			fmtError("Error: failed to write output file %q: %v\n", cfg.Output, err)
+		if _, err := writeSelectedMessage(cfg.Output, formatMessageFromOC(messages[0])); err != nil {
+			slog.Error("failed to write generated message", "path", cfg.Output, "error", err)
+			fmtError("Error: %v\n", err)
 			cleanup()
 			pauseExit(1, true)
 		}
@@ -502,13 +475,17 @@ func formatMessageFromOC(msg opencode.CommitMessage) string {
 	return strings.TrimSpace(msg.Subject) + "\n\n" + strings.TrimSpace(msg.Body)
 }
 
-func writeSelectedMessage(out io.Writer, selected string) (bool, error) {
+func writeSelectedMessage(path, selected string) (bool, error) {
 	if strings.TrimSpace(selected) == "" {
 		return false, nil
 	}
-	_, err := fmt.Fprintln(out, selected)
-	if err != nil {
-		return false, err
+	writer, closeWriter := resolveOutputWriter(path)
+	if writer == nil {
+		return false, fmt.Errorf("failed to open output file %q: %w", path, closeWriter())
+	}
+	_, writeErr := fmt.Fprintln(writer, selected)
+	if err := errors.Join(writeErr, closeWriter()); err != nil {
+		return false, fmt.Errorf("failed to write output file %q: %w", path, err)
 	}
 	return true, nil
 }

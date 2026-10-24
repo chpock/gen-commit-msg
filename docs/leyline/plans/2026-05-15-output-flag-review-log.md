@@ -186,3 +186,10 @@ D8. Review log Task 5 a11y evidence format improvement.
 
 Code review complete - round 1 - 2026-05-15
 Design review complete - round 1 - 2026-05-15
+
+## Follow-up: output preservation — 2026-10-24
+
+- D5 is resolved by non-truncating validation of existing output paths and exclusive creation/removal of probes for absent paths.
+- F8 is resolved by correcting the product spec's test-file references.
+- The related cancellation path now checks for an empty message before opening the output destination.
+- Validation, independent review findings, and dispositions are recorded in `2026-10-24-cleanup-output-fixes-review-log.md`.

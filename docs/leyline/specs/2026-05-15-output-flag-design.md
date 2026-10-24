@@ -27,11 +27,13 @@ Shell redirection (`gen-commit-msg > /tmp/msg`) already works for scripting beca
 ## Constraints
 
 - CLI flag > `GCM_OUTPUT` env var > default (empty = stdout)
-- The file is written only on successful message selection (not on cancel)
+- The file is opened for overwrite only when a non-empty message is ready to be written (not on cancel)
+- Existing output contents and permissions are preserved during early validation and whenever no message is produced
 - If `--output` is set but no message is produced (no staged files, user cancels selection), no file is created and exit code is 0 — same as current stdout behavior
 - Path resolution: relative to CWD, same as all other file operations in the tool
 - Parent directory of the output path must exist (no auto-creation)
-- Early validation: check that the output path is writable after config parsing, before server start
+- Symbolic links are accepted only when their target exists and is writable. A dangling output symlink is rejected during early validation without changing the link or creating its target.
+- Early validation: check that the output path is writable after config parsing, before server start. Open existing files without truncation; for absent paths, create a probe exclusively and remove only that probe. Surface probe close/removal failures instead of ignoring them.
 
 ## Approaches considered
 
@@ -56,9 +58,9 @@ Trade-offs: more complex, user didn't ask for it, can be added later if needed.
 | File | Change |
 |------|--------|
 | `internal/config/config.go` | Add `Output string` field, `--output`/`-o` flag in `initFlags()`, resolve from `GCM_OUTPUT` env in `ParseFlags()`. Add `ValidateOutputPath()` method that checks writability. |
-| `cmd/gen-commit-msg/main.go` | After config parsing, call `cfg.ValidateOutputPath()` before server start (both TUI and non-interactive paths). **TUI path (line ~301):** wrap `os.Stdout` with output file if `cfg.Output` is set; use in `writeSelectedMessage`. **Non-interactive path (line ~377):** wrap `os.Stdout` with output file; if file open fails, call `cleanup()` explicitly before `pauseExit` to ensure server/session teardown. |
+| `cmd/gen-commit-msg/main.go` | After config parsing, call `cfg.ValidateOutputPath()` before server start (both TUI and non-interactive paths). Both TUI and non-interactive paths use `writeSelectedMessage`, which checks for empty selection before opening the output destination, writes the message and newline, and closes the file. Non-interactive output failures call `cleanup()` explicitly before `pauseExit` to ensure server/session teardown. |
 | `internal/config/config_test.go` | Add test for `--output` flag resolution, env var, default. Add tests for `ValidateOutputPath` (writable path, non-existent parent, permission denied). |
-| `cmd/gen-commit-msg/main_test.go` | Add behavioral test: verify `writeSelectedMessage` with injected writer writes to the correct destination. |
+| `cmd/gen-commit-msg/output_test.go`, `cmd/gen-commit-msg/cli_test.go` | Verify successful creation/overwrite, unchanged existing output and absent new output on empty selection, and surfaced open/write failures. Subprocess tests cover stdout/file routing and preservation on early exits. |
 
 ## Success criteria
 
@@ -67,7 +69,8 @@ Trade-offs: more complex, user didn't ask for it, can be added later if needed.
 - `GCM_OUTPUT=/tmp/msg.txt gen-commit-msg` works equivalently
 - File write errors are reported clearly and cause exit code 1
 - Unwritable paths (non-existent parent dir, permission denied) fail with a clear error before server start
-- With `--output` and no staged files, exit code 0, no file created (consistent with stdout behavior)
+- With `--output` and no staged files or canceled selection, exit code 0, no new file created, and any existing file unchanged
+- Early validation preserves existing files, writable symlink targets, hard links, and file permissions
 
 ## Approvals
 

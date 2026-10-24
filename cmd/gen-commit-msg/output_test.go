@@ -1,37 +1,61 @@
 package main
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
+	"syscall"
 	"testing"
 )
 
 func TestWriteSelectedMessageWritesMessageAndNewline(t *testing.T) {
-	var buf bytes.Buffer
-	wrote, err := writeSelectedMessage(&buf, "feat: add tests")
-	if err != nil {
-		t.Fatalf("writeSelectedMessage returned error: %v", err)
-	}
-	if !wrote {
-		t.Fatal("writeSelectedMessage should report wrote=true")
-	}
-	if got, want := buf.String(), "feat: add tests\n"; got != want {
-		t.Fatalf("stdout = %q, want %q", got, want)
+	for _, existing := range []bool{false, true} {
+		t.Run(fmt.Sprintf("existing=%t", existing), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "message.txt")
+			if existing {
+				if err := os.WriteFile(path, []byte("old message that must be completely overwritten\n"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			wrote, err := writeSelectedMessage(path, "feat: add tests")
+			if err != nil || !wrote {
+				t.Fatalf("writeSelectedMessage = %t, %v; want true, nil", wrote, err)
+			}
+			data, err := os.ReadFile(path)
+			if err != nil || string(data) != "feat: add tests\n" {
+				t.Fatalf("output = %q, error = %v", data, err)
+			}
+		})
 	}
 }
 
 func TestWriteSelectedMessageSkipsEmptyOutput(t *testing.T) {
-	var buf bytes.Buffer
-	wrote, err := writeSelectedMessage(&buf, "")
-	if err != nil {
-		t.Fatalf("writeSelectedMessage returned error: %v", err)
-	}
-	if wrote {
-		t.Fatal("writeSelectedMessage should report wrote=false for empty selection")
-	}
-	if got := buf.Len(); got != 0 {
-		t.Fatalf("stdout bytes = %d, want 0", got)
+	for _, selected := range []string{"", " \n\t"} {
+		for _, existing := range []bool{false, true} {
+			t.Run(fmt.Sprintf("selected=%q/existing=%t", selected, existing), func(t *testing.T) {
+				path := filepath.Join(t.TempDir(), "message.txt")
+				const original = "keep this message\n"
+				if existing {
+					if err := os.WriteFile(path, []byte(original), 0644); err != nil {
+						t.Fatal(err)
+					}
+				}
+				wrote, err := writeSelectedMessage(path, selected)
+				if err != nil || wrote {
+					t.Fatalf("empty selection = %t, %v; want false, nil", wrote, err)
+				}
+				data, err := os.ReadFile(path)
+				if existing {
+					if err != nil || string(data) != original {
+						t.Fatalf("existing output = %q, error = %v", data, err)
+					}
+				} else if !os.IsNotExist(err) {
+					t.Fatalf("empty selection created output: %q, error = %v", data, err)
+				}
+			})
+		}
 	}
 }
 
@@ -67,5 +91,23 @@ func TestResolveOutputWriterFile(t *testing.T) {
 	}
 	if string(data) != "hello\n" {
 		t.Errorf("file content = %q, want %q", string(data), "hello\n")
+	}
+}
+
+func TestWriteSelectedMessageReportsOpenError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing", "message.txt")
+	wrote, err := writeSelectedMessage(path, "feat: add tests")
+	if wrote || !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "failed to open output file") {
+		t.Fatalf("writeSelectedMessage = %t, %v; want an output-open error", wrote, err)
+	}
+}
+
+func TestWriteSelectedMessageReportsWriteError(t *testing.T) {
+	if _, err := os.Stat("/dev/full"); os.IsNotExist(err) {
+		t.Skip("/dev/full is unavailable")
+	}
+	wrote, err := writeSelectedMessage("/dev/full", "feat: add tests")
+	if wrote || !errors.Is(err, syscall.ENOSPC) || !strings.Contains(err.Error(), "failed to write output file") {
+		t.Fatalf("writeSelectedMessage = %t, %v; want an output-write error", wrote, err)
 	}
 }

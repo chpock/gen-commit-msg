@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -252,6 +254,9 @@ func TestValidateOutputPathWritableFile(t *testing.T) {
 	if err := cfg.ValidateOutputPath(); err != nil {
 		t.Errorf("expected nil error for writable path, got: %v", err)
 	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatalf("validation left an output file: %v", err)
+	}
 }
 
 func TestValidateOutputPathNonExistentParent(t *testing.T) {
@@ -279,5 +284,99 @@ func TestParseFlagsValidationSubjectMinMaxEqual(t *testing.T) {
 	}
 	if cfg.SubjectMin != 3 || cfg.SubjectMax != 3 {
 		t.Errorf("SubjectMin=%d SubjectMax=%d, want both 3", cfg.SubjectMin, cfg.SubjectMax)
+	}
+}
+
+func TestValidateOutputPathPreservesExistingFile(t *testing.T) {
+	for _, kind := range []string{"regular", "symlink", "hardlink"} {
+		t.Run(kind, func(t *testing.T) {
+			dir := t.TempDir()
+			target := filepath.Join(dir, "existing.txt")
+			const original = "previous commit message\n"
+			if err := os.WriteFile(target, []byte(original), 0640); err != nil {
+				t.Fatal(err)
+			}
+			path := target
+			if kind != "regular" {
+				path = filepath.Join(dir, "output.txt")
+				link := os.Link
+				if kind == "symlink" {
+					link = os.Symlink
+				}
+				if err := link(target, path); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before, err := os.Lstat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg := &Config{Output: path}
+			if err := cfg.ValidateOutputPath(); err != nil {
+				t.Fatal(err)
+			}
+			after, err := os.Lstat(path)
+			if err != nil {
+				t.Fatalf("validation removed the output path: %v", err)
+			}
+			if !os.SameFile(before, after) || before.Mode() != after.Mode() {
+				t.Error("validation replaced the output path or changed its permissions")
+			}
+			data, err := os.ReadFile(target)
+			if err != nil || string(data) != original {
+				t.Fatalf("existing content = %q, error = %v; want %q", data, err, original)
+			}
+		})
+	}
+}
+
+func TestValidateOutputPathPermissionDenied(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can bypass file permissions")
+	}
+	t.Run("existing file", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "message.txt")
+		const original = "keep this message\n"
+		if err := os.WriteFile(path, []byte(original), 0444); err != nil {
+			t.Fatal(err)
+		}
+		cfg := &Config{Output: path}
+		if err := cfg.ValidateOutputPath(); !errors.Is(err, os.ErrPermission) {
+			t.Errorf("expected permission error, got %v", err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil || string(data) != original {
+			t.Fatalf("read-only content = %q, error = %v", data, err)
+		}
+	})
+	t.Run("parent directory", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.Chmod(dir, 0555); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
+		cfg := &Config{Output: filepath.Join(dir, "message.txt")}
+		if err := cfg.ValidateOutputPath(); !errors.Is(err, os.ErrPermission) {
+			t.Errorf("expected permission error, got %v", err)
+		}
+	})
+}
+
+func TestValidateOutputPathRejectsDanglingSymlink(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "output.txt")
+	const target = "missing.txt"
+	if err := os.Symlink(target, path); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &Config{Output: path}
+	if err := cfg.ValidateOutputPath(); err == nil {
+		t.Fatal("expected early rejection of an output symlink with an absent target")
+	}
+	if got, err := os.Readlink(path); err != nil || got != target {
+		t.Fatalf("validation changed the symlink: target=%q error=%v", got, err)
+	}
+	if _, err := os.Lstat(filepath.Join(dir, target)); !os.IsNotExist(err) {
+		t.Fatalf("validation created the absent symlink target: %v", err)
 	}
 }

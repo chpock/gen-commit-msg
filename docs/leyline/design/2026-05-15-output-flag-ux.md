@@ -31,8 +31,9 @@ Shorthand `-o` matches common CLI convention. The description uses imperative mo
 
 | Condition | Output channel | Message |
 |---|---|---|
-| File cannot be created | stderr | `Error: failed to open output file "path": <os error>` |
-| File write fails | stderr | `Error: failed to write output file "path": <os error>` |
+| File cannot be created, or output is a dangling symlink | stderr | `Error: failed to open output file "path": <os error>` |
+| File write or close fails | stderr | `Error: failed to write output file "path": <os error>` |
+| Validation probe cannot be closed or removed | stderr | `Error: failed to validate output file "path": <os error>` |
 | Output successful | file | (silent — same as current stdout success) |
 
 Progress output during TUI mode (spinner, step status) is unaffected — it renders to `/dev/tty`, not stdout. The `--quiet` flag suppresses it regardless of `--output`.
@@ -41,7 +42,7 @@ Progress output during TUI mode (spinner, step status) is unaffected — it rend
 
 - **Error:** `Error: failed to open output file "/bad/path": permission denied`
 - **Success:** (no output to stdout/stderr — the commit message is in the file)
-- **Empty (no selection):** (unchanged — no output at all, as with stdout mode when user cancels)
+- **Empty (no selection):** no output at all, as with stdout mode when the user cancels; no new output file is created, and any existing output file remains unchanged
 
 Existing voice conventions: errors go to stderr, may use `col.RedText` when TTY, format is `Error: <reason>`. The new error messages follow this pattern exactly.
 

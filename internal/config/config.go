@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -168,11 +169,22 @@ func (c *Config) ValidateOutputPath() error {
 	if !info.IsDir() {
 		return fmt.Errorf("failed to open output file %q: not a directory", c.Output)
 	}
-	f, err := os.OpenFile(c.Output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	f, err := os.OpenFile(c.Output, os.O_WRONLY, 0)
+	created := false
+	if os.IsNotExist(err) {
+		f, err = os.OpenFile(c.Output, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		created = err == nil
+	}
 	if err != nil {
 		return fmt.Errorf("failed to open output file %q: %w", c.Output, err)
 	}
-	_ = f.Close()
-	_ = os.Remove(c.Output)
+	closeErr := f.Close()
+	if created {
+		closeErr = errors.Join(closeErr, os.Remove(c.Output))
+	}
+	if closeErr != nil {
+		return fmt.Errorf("failed to validate output file %q: %w", c.Output, closeErr)
+	}
+	slog.Debug("output path validated", "path", c.Output, "created_probe", created)
 	return nil
 }

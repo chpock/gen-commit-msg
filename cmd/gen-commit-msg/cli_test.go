@@ -184,3 +184,50 @@ func TestCLIRepositoryIgnoresGitEnvironment(t *testing.T) {
 		t.Fatalf("fixture Git commands modified external paths: %v", entries)
 	}
 }
+
+func TestCLIPreservesOutputWithoutMessage(t *testing.T) {
+	for _, reason := range []string{"no staged changes", "not a repository", "non-interactive range"} {
+		for _, existing := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/existing=%t", reason, existing), func(t *testing.T) {
+				dir := t.TempDir()
+				wantExit := 1
+				var wantError string
+				switch reason {
+				case "no staged changes":
+					dir = newCLIRepository(t, false)
+					wantExit = 0
+				case "not a repository":
+					wantError = "not a git repository"
+				case "non-interactive range":
+					dir = newCLIRepository(t, true)
+					wantError = "needs an interactive terminal"
+				}
+				path := filepath.Join(t.TempDir(), "message.txt")
+				const original = "previous message\n"
+				if existing {
+					if err := os.WriteFile(path, []byte(original), 0644); err != nil {
+						t.Fatal(err)
+					}
+				}
+				cmd := newCLICommand(t, dir, "--output", path, "--pause", "off")
+				var stdout, stderr bytes.Buffer
+				cmd.Stdout, cmd.Stderr = &stdout, &stderr
+				_ = cmd.Run()
+				if cmd.ProcessState == nil || cmd.ProcessState.ExitCode() != wantExit {
+					t.Fatalf("CLI state = %v, want exit %d; stderr: %s", cmd.ProcessState, wantExit, &stderr)
+				}
+				if stdout.Len() != 0 || !strings.Contains(stderr.String(), wantError) || (wantExit == 0 && stderr.Len() != 0) {
+					t.Fatalf("unexpected output: stdout=%q stderr=%q", &stdout, &stderr)
+				}
+				data, err := os.ReadFile(path)
+				if existing {
+					if err != nil || string(data) != original {
+						t.Errorf("existing output = %q, error = %v; want %q", data, err, original)
+					}
+				} else if !os.IsNotExist(err) {
+					t.Errorf("output created without a message: content=%q error=%v", data, err)
+				}
+			})
+		}
+	}
+}

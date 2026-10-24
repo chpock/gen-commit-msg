@@ -8,6 +8,8 @@ Product spec approved - round 4 - 2026-05-11
 
 Deep-discovery pass complete - round 4 - 2026-05-11
 
+Current harness and lifecycle requirements: [Pi and OpenCode harness support](2026-10-24-pi-harness-design.md). Its approved D1–D13 contract supersedes the original OpenCode-only orchestration. Historical approach comparisons below are retained as design history.
+
 ## Problem
 
 Generating high-quality git commit messages manually is tedious. opencode can generate them from the git diff, but there is no convenient CLI tool that manages the opencode server lifecycle, configures a dedicated agent, and provides an interactive TUI for selecting among generated variants.
@@ -18,28 +20,29 @@ Generating high-quality git commit messages manually is tedious. opencode can ge
 - Start `opencode serve --hostname 127.0.0.1 --port 0`, parse stdout for a line matching `opencode server listening on http://127.0.0.1:<port>` with a 30-second timeout, then issue a lightweight API request to confirm the server is ready before proceeding. On parse failure, include the actual server output in the error message.
 - Set `Pdeathsig: syscall.SIGKILL` on the opencode child process so the server dies with the parent even if cleanup code cannot run
 - Handle SIGINT and SIGTERM signals for graceful shutdown (session deletion, server stop) before exit
-- On any exit path (success or error), delete the opencode session and shut down the server in a `defer` block with a 5-second timeout. SIGKILL session leaks are an accepted risk
+- Each selected backend owns cleanup before returning results on success, failure or cancellation. OpenCode session deletion retains its 10-second TTY/five-second non-TTY deadline; server stop uses SIGTERM, up to five seconds, SIGKILL if needed and completed waiting. SIGKILL session leaks remain an accepted risk
 - Idempotently create an agent `.md` file at `${XDG_CONFIG_HOME:-$HOME/.config}/opencode/agents/<agent-name>.md` (the agent name comes from `--agent`, default `gen-commit-msg`)
-- Create an opencode session and prompt it to generate commit messages, passing `--subject-min` / `--subject-max` and `--body` as prompt parameters and requesting structured JSON output (opencode accesses the git diff on its own)
+- Select `auto|pi|opencode`, preferring an executable Pi in auto mode without fallback after its errors. Use a sessionless Pi RPC process or the existing OpenCode session/API path.
+- Collect staged-change context in the application and pass its JSON plus subject/body parameters to either backend; OpenCode retains native structured output
 - Delete the session and shut down the opencode server process after completion
-- Display a TUI with a progress view (5 steps) during generation, then an interactive inline list of subject line variants (one per line, no body in list; body only appears in final stdout output)
+- Display the selected backend's real progress steps, finish cleanup, then show the existing inline subject selection list; single candidates auto-select
 - On user selection, output the chosen message to stdout
 - Configurable via CLI flags and environment variables with clear precedence (flag > env > default)
 - Autodetect non-TTY context: if not a terminal and `--subject-max > 1`, error with a message suggesting `--subject-max 1`. If not a terminal and `--subject-max 1`, run generation silently and print the result to stdout — no TUI, no progress output
 
 ## Non-goals
 
-- No `--model` flag (use whatever model the opencode server is configured for)
+- No `--model` flag; model/provider/authentication remain configured through the selected harness
 - No `--extra` prompt flag
-- No writing to `.git/COMMIT_EDITMSG` (output to stdout only)
+- No implicit writing to `.git/COMMIT_EDITMSG`; an explicit `--output` destination follows the output-flag specification
 - No config file support (.env, yaml, toml, etc.)
 - No git hook integration
-- No automatic diff passing to opencode; the tool relies on opencode's built-in git diff access and passes only prompt parameters
+- No agent-side Git collection: preserve the application's versioned context collector and staged-only scope
 
 ## Constraints
 
 - Go 1.22+
-- `opencode` CLI must be installed and on `PATH`
+- The selected harness must be on PATH: Pi 1.4.0+ or the existing supported OpenCode API/serve CLI. Git remains required. Native Pi search tools additionally need cached/system rg and fd/fdfind as described in the harness spec
 - Must run inside a git repository
 - Dependencies: `github.com/sst/opencode-sdk-go` (latest version), `github.com/charmbracelet/bubbletea` + `bubbles/spinner` + `bubbles/list`
 - CLI flag parsing via `spf13/pflag`
@@ -106,13 +109,14 @@ Priority: CLI flag > env var > default.
 | `--subject-min` | `-m` | `GCM_SUBJECT_MIN` | 1..N | 1 | Minimum number of subject line variants to request |
 | `--subject-max` | `-x` | `GCM_SUBJECT_MAX` | 1..20 | 5 | Maximum number of subject line variants to request |
 | `--body` | | `GCM_BODY` | true, false | true | Whether to generate message body |
+| `--harness` | | `GCM_HARNESS` | auto, pi, opencode | auto | Select generation harness; auto prefers Pi |
 | `--quiet` | `-q` | `GCM_QUIET` | true, false | false | Suppress progress messages and spinner (not the selection list) |
-| `--agent` | `-a` | `GCM_AGENT` | string | gen-commit-msg | opencode agent name |
+| `--agent` | `-a` | `GCM_AGENT` | string | gen-commit-msg | OpenCode-only agent name; ignored by Pi |
 | `--pause` | | `GCM_PAUSE` | on, off, on-error | on-error | Pause before exit behavior |
-| `--install-agent` | | `GCM_INSTALL_AGENT` | always, if-not-exists, no | if-not-exists | Agent installation behavior |
+| `--install-agent` | | `GCM_INSTALL_AGENT` | always, if-not-exists, no | if-not-exists | OpenCode-only agent installation behavior; ignored by Pi |
 | `--output` | `-o` | `GCM_OUTPUT` | path | (stdout) | Write commit message to file instead of stdout. See `docs/leyline/specs/2026-05-15-output-flag-design.md` for full specification. |
 
-Server hostname (`127.0.0.1`) and startup timeout (30s) are constants in the `server` package — not exposed as flags. Generation timeout (120s) is a constant in the `opencode` package.
+OpenCode server hostname/startup and HTTP-client timeout remain unchanged. Pi uses 30 seconds for version/startup/readiness, independent 120-second prompt operations and five seconds of shutdown grace. These policies are constants, not new flags; see the harness spec.
 
 `--quiet` suppresses only progress output (server startup messages, request-sending status, spinner). It does NOT suppress the interactive subject selection list when `--subject-max > 1`. It does NOT affect `--pause` behavior.
 
@@ -142,12 +146,12 @@ Rules:
 ## Success criteria
 
 - `go build ./cmd/gen-commit-msg` produces a working binary
-- Running in a git repo with staged changes: starts server, shows TUI, generates messages
+- Running in a git repo with staged changes selects the requested/auto harness, executes its workflow and shows backend-specific progress before message selection
 - Running in a git repo with no staged changes: exits silently
 - `--subject-min 1 --subject-max 1 --body false`: returns exactly one subject line, no body
 - Server starts within 30s timeout by parsing stdout for the listening URL, followed by a lightweight API health-check; server child process has `Pdeathsig: SIGKILL` set
 - SIGINT and SIGTERM trigger graceful shutdown (session deletion, server stop) before exit
-- Session deletion and server shutdown run in a `defer` block on all exit paths (success and error)
+- Backend cleanup completes before selection/output on success, failure and cancellation; confirmed results survive cleanup warnings, which remain visible in quiet/non-TTY modes
 - Agent file is created idempotently (not overwritten if it exists, unless `--install-agent always`); `--install-agent no` never installs and relies on opencode error for missing agent
 - All flags have corresponding env var overrides with correct precedence
 - Running without a TTY and `--subject-max > 1`: errors with a clear message suggesting `--subject-max 1`

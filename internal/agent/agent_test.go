@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -101,5 +103,50 @@ func TestEnsureAgent_CustomName(t *testing.T) {
 	expectedPath := filepath.Join(dir, "opencode", "agents", "custom-agent.md")
 	if _, err := os.Stat(expectedPath); err != nil {
 		t.Error("agent file with custom name not created")
+	}
+}
+
+func TestEnsureDefaultPromptCompatibility(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	if err := Ensure("default", "always"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "opencode", "agents", "default.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Preserve the installed OpenCode instructions and frontmatter across extraction.
+	const want = "a2f4b02a61d482e799e0baf8833a8090087903b46e5e98b7244896cdd12587a4"
+	if got := fmt.Sprintf("%x", sha256.Sum256(data)); got != want {
+		t.Fatalf("installed default prompt changed: sha256 = %s, want %s", got, want)
+	}
+}
+
+func TestEnsurePreservesCustomAgent(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	agents := filepath.Join(dir, "opencode", "agents")
+	if err := os.MkdirAll(agents, 0755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(agents, "custom.md")
+	const custom = "---\nmodel: local/custom\n---\nCustom commit instructions.\n"
+	if err := os.WriteFile(path, []byte(custom), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := Ensure("custom", "if-not-exists"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != custom || info.Mode().Perm() != 0600 {
+		t.Fatalf("custom agent modified: content = %q, mode = %v", data, info.Mode())
 	}
 }

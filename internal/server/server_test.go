@@ -26,7 +26,9 @@ func TestParseListenURL_Success(t *testing.T) {
 	input := strings.NewReader("some log\nopencode server listening on http://127.0.0.1:12345\nmore log\n")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	url, err := parseListenURL(input, ctx)
+	listen := make(chan listenResult, 1)
+	go func() { _ = scanOutput(input, listen) }()
+	url, err := parseListenURL(ctx, listen)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -39,7 +41,9 @@ func TestParseListenURL_NoMatch(t *testing.T) {
 	input := strings.NewReader("no match here\njust logs\n")
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	_, err := parseListenURL(input, ctx)
+	listen := make(chan listenResult, 1)
+	go func() { _ = scanOutput(input, listen) }()
+	_, err := parseListenURL(ctx, listen)
 	if err == nil {
 		t.Fatal("expected error for no match")
 	}

@@ -8,6 +8,8 @@ UX spec approved - round 4 - 2026-05-11
 
 design-interrogation skipped - scope: cli-only, UX paths exhaustively covered by 4 deep-discovery passes
 
+Harness selection, backend-specific progress, timeout and cleanup outcomes now follow [Pi and OpenCode harness support](2026-10-24-pi-harness-ux.md). Original OpenCode-specific error examples below apply only to that backend; Pi errors identify Pi instead.
+
 ## Surfaces enumerated
 
 | Surface | Type | Purpose |
@@ -27,15 +29,15 @@ design-interrogation skipped - scope: cli-only, UX paths exhaustively covered by
 
 1. User runs `gen-commit-msg` in a git repo with staged changes
 2. Tool checks for staged files (no visible output)
-3. Tool installs agent (if needed per `--install-agent`), starts opencode server
-4. TUI displays spinner: `Generating commit messages...` with animated indicator
-5. Tool creates session, sends prompt to opencode
-6. Spinner continues while opencode generates responses
-7. TUI transitions to result list: commit message subjects (one per line, no body in list)
+3. Tool resolves `--harness` / `GCM_HARNESS`; auto prefers Pi, with no fallback after a selected-backend error
+4. TUI displays the selected backend's real progress steps, beginning with Git-context collection
+5. Backend generates candidates: Pi uses a sessionless RPC process; OpenCode installs its agent if needed, starts its server and creates its session
+6. Backend completes cleanup; confirmed candidates survive a visible cleanup warning
+7. TUI transitions to the inline subjects-only result list, or auto-selects a single candidate
 8. User navigates with Up/Down arrows; selected item highlighted (`>` prefix + bold)
 9. User presses Enter to select; list clears from screen
 10. Selected commit message prints to stdout
-11. Tool deletes session, stops opencode server
+11. Backend resources have already been cleaned up; no second cleanup is initiated after selection
 12. If `--pause on` or `--pause on-error` with error: overlay `Press any key to exit...`
 13. Exit 0
 
@@ -56,7 +58,7 @@ Failure paths:
 2. Progress messages (server startup, request sending) and spinner are suppressed
 3. If `--subject-max > 1`: interactive selection list is shown normally (quiet does not suppress it)
 4. If `--subject-max 1`: result prints to stdout directly
-5. Server stopped, session deleted
+5. Backend cleanup has already finished before selection/output; cleanup warnings remain visible on stderr
 6. `--pause` behaves identically to non-quiet mode
 7. Exit 0 (or error exit as in Flow 1)
 
@@ -95,10 +97,10 @@ Failure paths:
 **Case B: `--subject-max 1`**
 
 1. User runs `gen-commit-msg --subject-max 1` in a non-TTY context
-2. Tool checks staged files, starts server silently (no progress output)
-3. Creates session, sends prompt, waits for response
-4. Result printed to stdout
-5. Session deleted, server stopped
+2. Tool checks staged files and selects the harness without progress output
+3. Runs the shared context/generation operation and finishes backend cleanup
+4. Result printed to stdout or `--output`; nonfatal cleanup warnings use stderr
+5. No backend resources remain awaiting the normal application exit
 6. Exit 0
 7. No TUI, no progress messages. `--quiet` is a no-op in this mode (nothing to suppress). `--pause` is a no-op in non-TTY mode (no TUI overlay to render).
 
@@ -142,7 +144,7 @@ Three reference strings:
 - **Terminal**: any terminal supporting ANSI escape sequences (bubbletea requirement). Tested against xterm-256color, tmux, st, kitty, iTerm2.
 - **Go version**: 1.22+
 - **Dependencies**: bubbletea + bubbles/spinner (no native extensions required)
-- **opencode CLI**: must be on PATH. Version-independent (any opencode that supports `serve --hostname --port` and the SDK v0.19.2 API).
+- **Harness CLI**: the selected executable must be on PATH. Pi requires version 1.4.0+; OpenCode retains the `serve --hostname --port` and SDK v0.19.2 API requirements. Pi's native search helpers are described in the harness UX spec.
 
 ## Non-goals
 

@@ -6,10 +6,14 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+
+	"github.com/chpock/gen-commit-msg/internal/generation"
 )
 
-//go:embed gen-commit-msg.md
-var DefaultPrompt string
+//go:embed frontmatter.md
+var frontmatter string
+
+var DefaultPrompt = frontmatter + "\n" + generation.Instructions
 
 func agentsDir() string {
 	base := os.Getenv("XDG_CONFIG_HOME")

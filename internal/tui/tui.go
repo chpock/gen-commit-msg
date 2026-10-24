@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,9 +12,10 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/chpock/gen-commit-msg/internal/color"
-	"github.com/chpock/gen-commit-msg/internal/opencode"
+	"github.com/chpock/gen-commit-msg/internal/generation"
 )
 
 type state int
@@ -26,39 +28,25 @@ const (
 	stateDone
 )
 
-type StepStatus int
+type StepStatus = generation.StepStatus
 
 const (
-	StepPending StepStatus = iota
-	StepRunning
-	StepDone
-	StepFailed
-	StepWarning
-	StepSkipped
-	StepInterrupted
+	StepPending     = generation.StepPending
+	StepRunning     = generation.StepRunning
+	StepDone        = generation.StepDone
+	StepFailed      = generation.StepFailed
+	StepWarning     = generation.StepWarning
+	StepSkipped     = generation.StepSkipped
+	StepInterrupted = generation.StepInterrupted
 )
 
 type stepItem struct {
-	label  string
-	status StepStatus
+	label         string
+	status        StepStatus
+	warningDetail string
 }
 
-type StepUpdateMsg struct {
-	Index  int
-	Status StepStatus
-	Detail string
-	Err    *opencode.AppError
-}
-
-func stepLabels() [5]string {
-	return [5]string{
-		"Collecting information about current changes...",
-		"Starting OpenCode...",
-		"Creating session...",
-		"Generating commit messages...",
-		"Cleaning up OpenCode resources...",
-	}
-}
+type StepUpdateMsg = generation.Update
 
 type CommitItem struct {
 	Subject string
@@ -77,7 +65,6 @@ type Model struct {
 	selected   string
 	quitting   bool
 	err        error
-	appErr     *opencode.AppError
 	subjectMax int
 	quiet      bool
 	width      int
@@ -89,7 +76,7 @@ type Model struct {
 	shutdown     func()
 }
 
-func NewModel(subjectMax int, quiet bool, shutdown func()) Model {
+func NewModel(subjectMax int, quiet bool, labels []string, shutdown func()) Model {
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
 
@@ -102,8 +89,7 @@ func NewModel(subjectMax int, quiet bool, shutdown func()) Model {
 	l.SetFilteringEnabled(false)
 	l.DisableQuitKeybindings()
 
-	labels := stepLabels()
-	steps := make([]stepItem, 5)
+	steps := make([]stepItem, len(labels))
 	for i := range steps {
 		steps[i] = stepItem{label: labels[i], status: StepPending}
 	}
@@ -196,8 +182,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case generationResultMsg:
 		if msg.err != nil {
 			slog.Error("generation failed", "error", msg.err)
-			m.err = msg.err
+			if m.err == nil {
+				m.err = msg.err
+			}
 			m.state = stateError
+			m.quitting = true
+			return m, tea.Quit
+		}
+		if m.shuttingDown || m.quitting || m.err != nil {
 			m.quitting = true
 			return m, tea.Quit
 		}
@@ -227,18 +219,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case StepUpdateMsg:
 		if m.state == stateProgress {
-			if msg.Index >= 0 && msg.Index < len(m.steps) {
-				m.steps[msg.Index].status = msg.Status
-				if msg.Detail != "" {
-					m.stepDetail = msg.Detail
-				}
-			} else {
+			if msg.Index < 0 || msg.Index >= len(m.steps) {
 				slog.Warn("step update with out-of-bounds index", "index", msg.Index, "len", len(m.steps))
+				return m, nil
 			}
-			if msg.Status == StepFailed && !m.shuttingDown {
+			m.steps[msg.Index].status = msg.Status
+			detail := msg.Detail
+			if detail == "" && msg.Err != nil {
+				detail = msg.Err.Error()
+			}
+			if msg.Status == StepWarning {
+				m.steps[msg.Index].warningDetail = detail
+			} else if detail != "" {
+				m.stepDetail = detail
+			}
+			if msg.Status == StepFailed && !m.shuttingDown && m.err == nil {
 				m.err = fmt.Errorf("%s", msg.Detail)
 				if msg.Err != nil {
-					m.appErr = msg.Err
+					m.err = msg.Err
 				}
 				slog.Debug("step failure", "index", msg.Index, "detail", msg.Detail)
 			}
@@ -339,6 +337,20 @@ func (m Model) renderSteps(b *strings.Builder) {
 	}
 }
 
+func (m Model) renderWarnings(b *strings.Builder) {
+	for _, step := range m.steps {
+		if step.warningDetail == "" {
+			continue
+		}
+		warning := step.warningDetail
+		if !strings.HasPrefix(warning, "Cleanup issue:") {
+			warning = "Cleanup issue: " + warning
+		}
+		b.WriteString("\n\n")
+		b.WriteString(ansi.Wrap("  "+warning, m.width, ""))
+	}
+}
+
 func (m Model) View() string {
 	switch m.state {
 	case stateProgress:
@@ -351,6 +363,7 @@ func (m Model) View() string {
 			b.WriteString("\n\n  ")
 			b.WriteString(m.stepDetail)
 		}
+		m.renderWarnings(&b)
 		if m.quitting {
 			b.WriteString("\n")
 		}
@@ -381,11 +394,13 @@ func (m Model) Error() error {
 func (m Model) RenderError() string {
 	var b strings.Builder
 	m.renderSteps(&b)
+	m.renderWarnings(&b)
 
 	b.WriteString("\n\n")
 
-	if m.appErr != nil {
-		b.WriteString(m.appErr.Render())
+	var renderer interface{ Render() string }
+	if errors.As(m.err, &renderer) {
+		b.WriteString(renderer.Render())
 	} else {
 		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
 		detailStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))

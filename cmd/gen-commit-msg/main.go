@@ -8,449 +8,26 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-isatty"
 	"golang.org/x/term"
 
-	"github.com/chpock/gen-commit-msg/internal/agent"
 	col "github.com/chpock/gen-commit-msg/internal/color"
 	"github.com/chpock/gen-commit-msg/internal/config"
+	"github.com/chpock/gen-commit-msg/internal/generation"
 	"github.com/chpock/gen-commit-msg/internal/git"
 	"github.com/chpock/gen-commit-msg/internal/logging"
 	"github.com/chpock/gen-commit-msg/internal/opencode"
-	"github.com/chpock/gen-commit-msg/internal/server"
-	"github.com/chpock/gen-commit-msg/internal/tui"
 )
 
 var version = "dev"
 
 func main() {
-	cfg, err := config.ParseFlags()
-	if err != nil {
-		fmtError("Error: %v\n", err)
-		os.Exit(2)
-	}
-
-	closeLog, err := logging.SetupFromConfig(cfg.LogLevel, cfg.LogFile)
-	if err != nil {
-		fmtError("Error: failed to configure logging: %v\n", err)
-		os.Exit(2)
-	}
-	defer func() { _ = closeLog() }()
-
-	slog.Debug("gen-commit-msg starting", "version", version,
-		"subject_min", cfg.SubjectMin, "subject_max", cfg.SubjectMax, "body", cfg.Body,
-		"quiet", cfg.Quiet, "agent", cfg.Agent, "log_level", cfg.LogLevel,
-		"log_file", cfg.LogFile, "pause", cfg.Pause, "install_agent", cfg.InstallAgent,
-		"output", cfg.Output)
-
-	isTTY := isTerminal()
-	slog.Debug("terminal check", "is_tty", isTTY)
-
-	pauseExit := func(code int, isError bool) {
-		shouldPause := cfg.Pause == "on" || (isError && cfg.Pause == "on-error")
-		if shouldPause {
-			pauseMsg := "Press Enter to exit..."
-			if isError {
-				pauseMsg = "An error occurred. Press Enter to exit..."
-			}
-			pauseWithEnter(isTTY, pauseMsg)
-		}
-		os.Exit(code)
-	}
-
-	if err := cfg.ValidateOutputPath(); err != nil {
-		slog.Error("output path validation failed", "error", err)
-		fmtError("Error: %v\n", err)
-		pauseExit(1, true)
-	}
-
-	if cfg.Version {
-		fmt.Printf("gen-commit-msg %s\n", version)
-		return
-	}
-
-	if cfg.Help {
-		config.Usage()
-		return
-	}
-
-	if !git.IsRepo() {
-		slog.Error("not a git repository")
-		fmtError("Error: not a git repository\n")
-		pauseExit(1, true)
-	}
-
-	hasStaged, err := git.HasStagedFiles()
-	if err != nil {
-		slog.Error("failed to check staged files", "error", err)
-		fmtError("Error: %v\n", err)
-		pauseExit(1, true)
-	}
-	if !hasStaged {
-		slog.Info("no staged files, exiting")
-		return
-	}
-
-	repoDir, err := os.Getwd()
-	if err != nil {
-		slog.Error("failed to get current directory", "error", err)
-		fmtError("Error: failed to get current directory: %s\n", err.Error())
-		pauseExit(1, true)
-	}
-	slog.Debug("repository directory", "dir", repoDir)
-	if !isTTY && cfg.SubjectMax > 1 {
-		slog.Error("non-TTY with subject max > 1",
-			"subject_max", cfg.SubjectMax, "is_tty", isTTY)
-		fmtError("Error: subject range requiring > 1 result needs an interactive terminal. Use --subject-max 1 for non-interactive mode.\n")
-		pauseExit(1, true)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		sig := <-sigCh
-		slog.Info("received signal, initiating shutdown", "signal", sig.String())
-		cancel()
-	}()
-
-	if isTTY {
-		m := tui.NewModel(int(cfg.SubjectMax), cfg.Quiet, cancel)
-		tty, closeTTY := openTTY()
-		defer closeTTY()
-		p := tea.NewProgram(m, tea.WithOutput(tty), tea.WithContext(context.Background()))
-
-		var wg sync.WaitGroup
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-			var srv *server.ProcessServer
-			var oc *opencode.Client
-			var sessionID string
-			var baseURL string
-			var messages []opencode.CommitMessage
-			var contextJSON string
-			cleanupDone := false
-			defer func() {
-				if cleanupDone {
-					return
-				}
-				if sessionID != "" && oc != nil {
-					delCtx, delCancel := context.WithTimeout(context.Background(), 10*time.Second)
-					defer delCancel()
-					if err := oc.DeleteSession(delCtx, sessionID); err != nil {
-						slog.Warn("cleanup: failed to delete session", "session_id", sessionID, "error", err)
-					}
-				}
-				if srv != nil {
-					if err := srv.Stop(); err != nil {
-						slog.Warn("cleanup: failed to stop server", "error", err)
-					}
-				}
-			}()
-
-			time.Sleep(50 * time.Millisecond)
-
-			// Step 0: Collecting information about current changes.
-			p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepRunning})
-			step0OK := true
-			commitContext, collectErr := git.CollectCommitMessageContext(ctx)
-			if collectErr != nil {
-				slog.Error("failed to collect commit message context", "error", collectErr)
-				p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "Failed to collect information about current changes", Err: &opencode.AppError{Op: "collect_git_context", Message: collectErr.Error(), Err: collectErr}})
-				step0OK = false
-			} else {
-				jsonValue, marshalErr := commitContext.Marshal()
-				if marshalErr != nil {
-					slog.Error("failed to marshal commit message context", "error", marshalErr)
-					p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepFailed, Detail: "Failed to serialize staged changes context", Err: &opencode.AppError{Op: "marshal_git_context", Message: marshalErr.Error(), Err: marshalErr}})
-					step0OK = false
-				} else {
-					contextJSON = jsonValue
-					p.Send(tui.StepUpdateMsg{Index: 0, Status: tui.StepDone})
-				}
-			}
-
-			// Step 1: Starting OpenCode (agent + server + healthcheck).
-			if !step0OK {
-				p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepSkipped})
-			} else {
-				p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepRunning})
-				step1OK := true
-				if err := agent.Ensure(cfg.Agent, cfg.InstallAgent); err != nil {
-					slog.Error("failed to ensure agent", "error", err)
-					p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepFailed, Detail: "Agent setup failed", Err: &opencode.AppError{Op: "agent_setup", Message: err.Error(), Err: err}})
-					step1OK = false
-				}
-				if step1OK {
-					srv = server.New()
-					var startErr error
-					baseURL, startErr = srv.Start(ctx)
-					if startErr != nil {
-						if errors.Is(startErr, context.Canceled) {
-							slog.Debug("server start cancelled")
-							p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepInterrupted, Detail: "Interrupted by user"})
-						} else {
-							slog.Error("failed to start server", "error", startErr)
-							p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepFailed, Detail: "OpenCode server failed to start", Err: &opencode.AppError{Op: "server_start", Message: startErr.Error(), Err: startErr}})
-						}
-						step1OK = false
-					} else {
-						slog.Info("opencode server started", "url", baseURL)
-						p.Send(tui.StepUpdateMsg{Index: 1, Status: tui.StepDone})
-					}
-				}
-				step0OK = step1OK
-			}
-
-			// Step 2: Creating session.
-			if !step0OK {
-				p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepSkipped})
-			} else {
-				p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepRunning})
-				oc = opencode.NewClient(baseURL, repoDir, cfg.Agent)
-				var createErr error
-				sessionID, createErr = oc.CreateSession(ctx, cfg.Agent)
-				if createErr != nil {
-					if errors.Is(createErr, context.Canceled) {
-						slog.Debug("session creation cancelled", "agent", cfg.Agent)
-						p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepInterrupted, Detail: "Interrupted by user"})
-					} else {
-						slog.Error("failed to create session", "agent", cfg.Agent, "error", createErr)
-						var createAppErr *opencode.AppError
-						if !errors.As(createErr, &createAppErr) {
-							createAppErr = &opencode.AppError{Op: "create_session", Message: createErr.Error(), Err: createErr}
-						}
-						p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepFailed, Detail: "Failed to create session", Err: createAppErr})
-					}
-				} else {
-					p.Send(tui.StepUpdateMsg{Index: 2, Status: tui.StepDone})
-				}
-			}
-
-			// Step 3: Generating commit messages.
-			sessionOK := step0OK && sessionID != ""
-			var genErr error
-			if !sessionOK {
-				p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepSkipped})
-			} else {
-				p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepRunning})
-				genParams := opencode.GenerateParams{
-					SubjectMin:  int(cfg.SubjectMin),
-					SubjectMax:  int(cfg.SubjectMax),
-					Body:        cfg.Body,
-					ContextJSON: contextJSON,
-				}
-				messages, genErr = oc.GenerateMessages(ctx, sessionID, genParams)
-				if genErr != nil {
-					if errors.Is(genErr, context.Canceled) {
-						slog.Debug("message generation cancelled")
-						p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepInterrupted, Detail: "Interrupted by user"})
-					} else {
-						slog.Error("failed to generate messages", "error", genErr)
-						var genAppErr *opencode.AppError
-						if !errors.As(genErr, &genAppErr) {
-							genAppErr = &opencode.AppError{Op: "generate_messages", Message: genErr.Error(), Err: genErr}
-						}
-						p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepFailed, Detail: "Failed to generate commit messages", Err: genAppErr})
-					}
-				} else {
-					p.Send(tui.StepUpdateMsg{Index: 3, Status: tui.StepDone})
-				}
-			}
-
-			// Step 4: Cleaning up OpenCode resources.
-			if sessionID != "" || srv != nil {
-				p.Send(tui.StepUpdateMsg{Index: 4, Status: tui.StepRunning})
-				cleanupWarn := ""
-				if sessionID != "" && oc != nil {
-					delCtx, delCancel := context.WithTimeout(context.Background(), 10*time.Second)
-					defer delCancel()
-					if err := oc.DeleteSession(delCtx, sessionID); err != nil {
-						slog.Warn("failed to delete session", "session_id", sessionID, "error", err)
-						cleanupWarn = "Cleanup issue: " + err.Error()
-					} else {
-						slog.Info("session deleted", "id", sessionID)
-					}
-				}
-				if srv != nil {
-					if err := srv.Stop(); err != nil {
-						slog.Warn("failed to stop server", "error", err)
-						if cleanupWarn == "" {
-							cleanupWarn = "Cleanup issue: " + err.Error()
-						}
-					} else {
-						slog.Info("server stopped")
-					}
-				}
-				if cleanupWarn != "" {
-					p.Send(tui.StepUpdateMsg{Index: 4, Status: tui.StepWarning, Detail: cleanupWarn})
-				} else {
-					p.Send(tui.StepUpdateMsg{Index: 4, Status: tui.StepDone})
-				}
-			} else {
-				p.Send(tui.StepUpdateMsg{Index: 4, Status: tui.StepSkipped})
-			}
-
-			cleanupDone = true
-
-			if ctx.Err() != nil {
-				p.Send(tui.AllStepsDone())
-				return
-			}
-
-			time.Sleep(300 * time.Millisecond)
-
-			if genErr == nil && len(messages) > 0 {
-				items := make([]tui.CommitItem, len(messages))
-				for i, msg := range messages {
-					items[i] = tui.CommitItem{Subject: msg.Subject, Body: msg.Body}
-				}
-				p.Send(tui.SetMessages(items))
-			}
-
-			p.Send(tui.AllStepsDone())
-		}()
-
-		finalModel, err := p.Run()
-		cancel()
-		slog.Info("initiating graceful shutdown")
-		wg.Wait()
-		slog.Info("graceful shutdown complete")
-		if err != nil {
-			slog.Error("TUI initialization failed", "error", err)
-			fmtError("Error: TUI initialization failed: %v\n", err)
-			closeTTY()
-			pauseExit(1, true)
-		}
-
-		m = finalModel.(tui.Model)
-		if m.Error() != nil {
-			slog.Error("TUI ended with error", "error", m.Error())
-			closeTTY()
-			fmt.Fprint(os.Stderr, m.RenderError())
-			shouldPause := cfg.Pause == "on" || cfg.Pause == "on-error"
-			if isTTY && shouldPause {
-				pauseWithEnter(isTTY, "")
-			}
-			fmt.Fprintln(os.Stderr)
-			os.Exit(1)
-		}
-		selected := m.SelectedMessage()
-		wrote, writeErr := writeSelectedMessage(cfg.Output, selected)
-		if writeErr != nil {
-			slog.Error("failed to write selected message", "path", cfg.Output, "error", writeErr)
-			fmtError("Error: %v\n", writeErr)
-			pauseExit(1, true)
-		}
-		if wrote {
-			slog.Info("message selected", "message", truncateString(selected, 80))
-		} else {
-			slog.Info("selection canceled, no message printed")
-		}
-
-		return
-	}
-
-	// Ensure agent prompt file exists.
-	commitContext, err := git.CollectCommitMessageContext(ctx)
-	if err != nil {
-		slog.Error("failed to collect commit message context", "error", err)
-		fmtError("Error: failed to collect information about current changes: %s\n", err.Error())
-		pauseExit(1, true)
-	}
-	contextJSON, err := commitContext.Marshal()
-	if err != nil {
-		slog.Error("failed to marshal commit message context", "error", err)
-		fmtError("Error: failed to serialize staged changes context: %s\n", err.Error())
-		pauseExit(1, true)
-	}
-
-	// Ensure agent prompt file exists.
-	if err := agent.Ensure(cfg.Agent, cfg.InstallAgent); err != nil {
-		slog.Error("failed to ensure agent", "error", err)
-		fmtError("Error: failed to ensure agent: %s\n", err.Error())
-		pauseExit(1, true)
-	}
-
-	srv := server.New()
-	baseURL, err := srv.Start(ctx)
-	if err != nil {
-		slog.Error("failed to start server", "error", err)
-		printServerError(err)
-		pauseExit(1, true)
-	}
-	slog.Info("opencode server started", "url", baseURL)
-
-	oc := opencode.NewClient(baseURL, repoDir, cfg.Agent)
-	sessionID, err := oc.CreateSession(ctx, cfg.Agent)
-	cleanup := func() {
-		slog.Debug("cleaning up session and server", "session_id", sessionID)
-		delCtx, delCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer delCancel()
-		if err := oc.DeleteSession(delCtx, sessionID); err != nil {
-			slog.Warn("failed to delete session during cleanup", "session_id", sessionID, "error", err)
-		}
-		if err := srv.Stop(); err != nil {
-			slog.Warn("failed to stop server during cleanup", "error", err)
-		}
-		slog.Info("server stopped")
-	}
-	defer cleanup()
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			slog.Debug("session creation cancelled", "agent", cfg.Agent)
-		} else {
-			slog.Error("failed to create session", "agent", cfg.Agent, "error", err)
-		}
-		fmt.Fprintln(os.Stderr, formatOpenCodeError(err))
-		cleanup()
-		pauseExit(1, true)
-	}
-	genParams := opencode.GenerateParams{
-		SubjectMin:  int(cfg.SubjectMin),
-		SubjectMax:  int(cfg.SubjectMax),
-		Body:        cfg.Body,
-		ContextJSON: contextJSON,
-	}
-
-	if !isTTY && cfg.SubjectMax == 1 {
-		slog.Debug("non-interactive mode", "subject_min", cfg.SubjectMin, "subject_max", cfg.SubjectMax)
-		messages, err := oc.GenerateMessages(ctx, sessionID, genParams)
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				slog.Debug("message generation cancelled")
-			} else {
-				slog.Error("failed to generate messages", "error", err)
-			}
-			fmt.Fprintln(os.Stderr, formatOpenCodeError(err))
-			cleanup()
-			pauseExit(1, true)
-		}
-		if len(messages) == 0 {
-			slog.Error("no commit messages generated")
-			fmtError("Error: no commit messages generated\n")
-			cleanup()
-			pauseExit(1, true)
-		}
-		if _, err := writeSelectedMessage(cfg.Output, formatMessageFromOC(messages[0])); err != nil {
-			slog.Error("failed to write generated message", "path", cfg.Output, "error", err)
-			fmtError("Error: %v\n", err)
-			cleanup()
-			pauseExit(1, true)
-		}
-		return
-	}
-
+	os.Exit(run())
 }
 
 func resolveOutputWriter(path string) (io.WriteCloser, func() error) {
@@ -468,13 +45,6 @@ func isTerminal() bool {
 	return isatty.IsTerminal(os.Stdout.Fd())
 }
 
-func formatMessageFromOC(msg opencode.CommitMessage) string {
-	if msg.Body == "" {
-		return strings.TrimSpace(msg.Subject)
-	}
-	return strings.TrimSpace(msg.Subject) + "\n\n" + strings.TrimSpace(msg.Body)
-}
-
 func writeSelectedMessage(path, selected string) (bool, error) {
 	if strings.TrimSpace(selected) == "" {
 		return false, nil
@@ -490,25 +60,6 @@ func writeSelectedMessage(path, selected string) (bool, error) {
 	return true, nil
 }
 
-func printServerError(err error) {
-	isTTY := isatty.IsTerminal(os.Stderr.Fd())
-	var msg string
-	switch {
-	case errors.Is(err, server.ErrOpenCodeNotFound):
-		msg = "Error: opencode not found. Is it installed?"
-	case errors.Is(err, server.ErrServerTimeout):
-		msg = "Error: opencode server failed to start (no response after 30s)"
-	case errors.Is(err, server.ErrServerExited):
-		msg = "Error: opencode server exited unexpectedly"
-	default:
-		msg = fmt.Sprintf("Error: %v", err)
-	}
-	if isTTY {
-		msg = col.RedText(msg)
-	}
-	fmt.Fprintln(os.Stderr, msg)
-}
-
 func fmtError(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	if isatty.IsTerminal(os.Stderr.Fd()) {
@@ -517,18 +68,12 @@ func fmtError(format string, args ...any) {
 	fmt.Fprint(os.Stderr, msg)
 }
 
-func formatOpenCodeError(err error) string {
-	isTTY := isatty.IsTerminal(os.Stderr.Fd())
-
-	var appErr *opencode.AppError
-	if errors.As(err, &appErr) {
-		if isTTY {
-			return appErr.Render()
+func formatGenerationError(err error) string {
+	if isatty.IsTerminal(os.Stderr.Fd()) {
+		var rich interface{ Render() string }
+		if errors.As(err, &rich) {
+			return rich.Render()
 		}
-		return "Error: " + appErr.Error()
-	}
-
-	if isTTY {
 		return col.Red + "Error: " + col.Reset + err.Error()
 	}
 	return "Error: " + err.Error()
@@ -580,4 +125,162 @@ func pauseWithEnter(isTTY bool, message string) {
 			break
 		}
 	}
+}
+
+func run() (exitCode int) {
+	cfg, err := config.ParseFlags()
+	if err != nil {
+		fmtError("Error: %v\n", err)
+		return 2
+	}
+	closeLog, err := logging.SetupFromConfig(cfg.LogLevel, cfg.LogFile)
+	if err != nil {
+		fmtError("Error: failed to configure logging: %v\n", err)
+		return 2
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			slog.Error("application panicked", "panic", recovered, "stack", string(debug.Stack()))
+			fmtError("Error: application failed unexpectedly: %v\n", recovered)
+			exitCode = 1
+		}
+		_ = closeLog()
+	}()
+
+	slog.Debug("gen-commit-msg starting", "version", version,
+		"subject_min", cfg.SubjectMin, "subject_max", cfg.SubjectMax, "body", cfg.Body,
+		"quiet", cfg.Quiet, "agent", cfg.Agent, "log_level", cfg.LogLevel,
+		"log_file", cfg.LogFile, "pause", cfg.Pause, "install_agent", cfg.InstallAgent,
+		"output", cfg.Output)
+	isTTY := isTerminal()
+	slog.Debug("terminal check", "is_tty", isTTY)
+	finish := func(code int, isError bool) int {
+		if cfg.Pause == "on" || (isError && cfg.Pause == "on-error") {
+			message := "Press Enter to exit..."
+			if isError {
+				message = "An error occurred. Press Enter to exit..."
+			}
+			pauseWithEnter(isTTY, message)
+		}
+		return code
+	}
+	if err := cfg.ValidateOutputPath(); err != nil {
+		slog.Error("output path validation failed", "error", err)
+		fmtError("Error: %v\n", err)
+		return finish(1, true)
+	}
+	if cfg.Version {
+		fmt.Printf("gen-commit-msg %s\n", version)
+		return 0
+	}
+	if cfg.Help {
+		config.Usage()
+		return 0
+	}
+	if !git.IsRepo() {
+		slog.Error("not a git repository")
+		fmtError("Error: not a git repository\n")
+		return finish(1, true)
+	}
+	hasStaged, err := git.HasStagedFiles()
+	if err != nil {
+		slog.Error("failed to check staged files", "error", err)
+		fmtError("Error: %v\n", err)
+		return finish(1, true)
+	}
+	if !hasStaged {
+		slog.Info("no staged files, exiting")
+		return 0
+	}
+	repoDir, err := os.Getwd()
+	if err != nil {
+		slog.Error("failed to get current directory", "error", err)
+		fmtError("Error: failed to get current directory: %s\n", err.Error())
+		return finish(1, true)
+	}
+	slog.Debug("repository directory", "dir", repoDir)
+	if !isTTY && cfg.SubjectMax > 1 {
+		slog.Error("non-TTY with subject max > 1", "subject_max", cfg.SubjectMax)
+		fmtError("Error: subject range requiring > 1 result needs an interactive terminal. Use --subject-max 1 for non-interactive mode.\n")
+		return finish(1, true)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(signals)
+	go func() {
+		select {
+		case received := <-signals:
+			slog.Info("received signal, initiating shutdown", "signal", received.String())
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	deleteTimeout := 5 * time.Second
+	if isTTY {
+		deleteTimeout = 10 * time.Second
+	}
+	backend := opencode.NewGenerator(opencode.GeneratorConfig{
+		Executable: "opencode", RepoDir: repoDir, Agent: cfg.Agent,
+		InstallAgent: cfg.InstallAgent, SessionDeleteTimeout: deleteTimeout,
+	})
+	request := generation.Request{SubjectMin: int(cfg.SubjectMin), SubjectMax: int(cfg.SubjectMax), Body: cfg.Body}
+	var selected string
+	if isTTY {
+		model, err := runInteractiveGeneration(ctx, backend, request, cfg.Quiet)
+		if err != nil {
+			slog.Error("TUI failed", "error", err)
+			fmtError("Error: TUI failed: %v\n", err)
+			return finish(1, true)
+		}
+		if model.Error() != nil {
+			slog.Error("TUI ended with error", "error", model.Error())
+			if cfg.Quiet {
+				fmt.Fprintln(os.Stderr, formatGenerationError(model.Error()))
+			} else {
+				fmt.Fprint(os.Stderr, model.RenderError())
+			}
+			if cfg.Pause == "on" || cfg.Pause == "on-error" {
+				message := ""
+				if cfg.Quiet {
+					message = "Press Enter to exit."
+				}
+				pauseWithEnter(isTTY, message)
+			}
+			fmt.Fprintln(os.Stderr)
+			return 1
+		}
+		selected = model.SelectedMessage()
+		if ctx.Err() != nil {
+			selected = ""
+		}
+	} else {
+		slog.Debug("non-interactive mode", "subject_min", cfg.SubjectMin, "subject_max", cfg.SubjectMax)
+		result, err := generateMessages(ctx, backend, request, nil)
+		writeWarnings(os.Stderr, result.Warnings)
+		if err == nil {
+			err = ctx.Err()
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, formatGenerationError(err))
+			return finish(1, true)
+		}
+		selected = result.Messages[0].Format()
+	}
+
+	wrote, err := writeSelectedMessage(cfg.Output, selected)
+	if err != nil {
+		slog.Error("failed to write selected message", "path", cfg.Output, "error", err)
+		fmtError("Error: %v\n", err)
+		return finish(1, true)
+	}
+	if wrote {
+		slog.Info("message selected", "message", truncateString(selected, 80))
+	} else {
+		slog.Info("selection canceled, no message printed")
+	}
+	return 0
 }

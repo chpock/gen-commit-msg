@@ -6,7 +6,8 @@ Surfaces: cli-only
 ## Commands enumerated
 - Primary command surface: `gen-commit-msg` in TTY and non-TTY modes.
 - New progress step in the pipeline: `Collecting information about current changes...`
-  as step 0 before OpenCode server startup.
+  as step 0 before either selected harness starts. See
+  `2026-10-24-pi-harness-ux.md` for the harness-specific continuation.
 - Internal git commands run automatically and are not direct user commands.
 
 ## Help / usage text
@@ -16,12 +17,14 @@ Surfaces: cli-only
   continue.
 
 ## Error and progress output formatting
-- TTY progress now has five steps:
+- OpenCode TTY progress has five steps:
   1. Collecting information about current changes...
   2. Starting OpenCode...
   3. Creating session...
   4. Generating commit messages...
   5. Cleaning up OpenCode resources...
+- Pi continues after context collection with Starting Pi, Generating commit
+  messages, and Stopping Pi; no server/session steps are displayed.
 - If context collection fails, remaining steps are marked as skipped.
 - Failure detail is concise and command-specific.
 - Non-TTY mode remains non-interactive and prints only final output/errors.
@@ -55,7 +58,7 @@ Surfaces: cli-only
 ## Non-goals
 - User-configurable command sets for context collection.
 - Changes to selected commit message output formatting.
-- Changes to OpenCode response schema.
+- Changes to either backend's response schema.
 
 ## Approvals
 UX spec approved - round 1 - 2026-05-16

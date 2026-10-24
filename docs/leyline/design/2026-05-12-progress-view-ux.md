@@ -1,101 +1,69 @@
-# Progress View for Backend Steps - UX spec
+# Progress view for generation steps — UX spec
+
 Date: 2026-05-12
-Product spec: docs/leyline/specs/2026-05-12-progress-view-design.md
-Surfaces: single-screen-ui
+Current harness contract: 2026-10-24
+Product: `../specs/2026-05-12-progress-view-design.md`.
+Harness UX: `2026-10-24-pi-harness-ux.md`.
+Original UX approval: round 3, 2026-05-12.
 
-UX spec approved - round 3 - 2026-05-12
+## Surfaces
 
-Design-interrogation round 1 applied:
-- (S) alternate screen buffer errors ephemeral → added stderr cleanup line
-- (S) post-TUI cleanup invisible → "Cleaning up..." on stderr
-- (S) step 4/5 failure loses messages → Flow 2b with ⚠ warning, messages still accessible
-- (O) error view surface inconsistency → merged into Progress view
-- (O) screen reader in-place transitions → documented limitation
-- (O) any-key accidental dismissal → 1s debounce + deliberate keybinding
- - (O) sub-40-column undefined → error message + exit
-- (S) TUI render race → goroutine starts after first View() (see product spec)
-- (O) bright ANSI-dependent → SGR 1 for running, SGR 2 for pending/done
+- Progress: the selected backend's full step list, status indicators and inline detail, shown before message selection.
+- Selection: the existing inline subjects-only list, no alternate screen, status bar or key-binding help; one line per item.
+- stdout/output file: only the final selected message.
+- stderr: errors and warnings when progress is unavailable; never Pi protocol records.
 
-Design-interrogation pass complete - round 1 - 2026-05-12
+## Initial lists
 
-## Surfaces enumerated
-- **Progress view**: Vertical list of 5 steps with status indicators (pending/running/done/failed) + inline error display. Shown immediately when TUI starts, before message selection. All errors (step failures, zero messages) are shown inline on this surface.
-- **Message selection view**: Inline list of commit message subjects (one per line, body not shown). No alt screen, no status bar, no key binding help. Height equals item count. ↑↓ navigation and Enter to select. After selection, list clears from screen and result prints to stdout.
+OpenCode:
 
-## User flows
+1. Collecting information about current changes...
+2. Starting OpenCode...
+3. Creating session...
+4. Generating commit messages...
+5. Cleaning up OpenCode resources...
 
-### Flow 1 — Successful generation
-1. User runs `gen-commit-msg` with staged files
-2. Progress view appears — all 5 steps listed, all pending
-3. Steps 1→5 complete in order: pending → running (spinner) → done (✓)
-4. After step 5 completes, progress view clears and auto-transitions to inline message selection view (no alt screen, no status bar, one line per item, height matches item count)
-5. User navigates with ↑↓, selects with Enter → list clears from screen, message printed to stdout → program exits
-6. (Single message: auto-selected, skips selection view)
-7. (Zero messages: inline error on progress view — steps 1-5 ✓, error text below)
+Pi:
 
-### Flow 2 — Progress step failure (step 1 or 2)
-1. Progress view appears — all 5 steps pending
-2. A step transitions: pending → running → failed (✗)
-3. Error detail appears as stepDetail below the step list
-4. Steps that depend on the failed step are marked as skipped (`-`), sent explicitly by the goroutine
-5. Cleanup steps (delete session, stop server) run if their prerequisites exist and show their real outcome (✓ / ⚠ / ✗)
-6. When all steps report their final status (`allStepsDoneMsg`), the TUI transitions to error view showing the first failure
-7. Dismiss with Enter or Ctrl+C → program exits with error code 1
+1. Collecting information about current changes...
+2. Starting Pi...
+3. Generating commit messages...
+4. Stopping Pi...
 
-### Flow 2b — Cleanup warning (step 4 or 5 failure after successful generation)
-1. Steps 1-3 complete successfully (✓)
-2. Step 4 or 5 transitions: running → warning (⚠)
-3. Warning message ("Cleanup issue: <detail>") appears below step list
-4. TUI auto-transitions to message selection view — messages are accessible
-5. User selects message → stdout → exit
-6. Cleanup timeout runs silently
+All labels are visible initially. Preserve existing pending/running/done/failed/interrupted/warning/skipped indicators and styles. Native corrective prompts update generation detail rather than adding lifecycle steps. Pi readiness completes before its startup checkmark.
 
-### Flow 3 — Generation failure (step 3)
-1. Steps 1-2 complete successfully (✓)
-2. Step 3 transitions: running → failed (✗)
-3. Error detail appears as stepDetail below the step list
-4. Cleanup steps 4-5 run and show their real outcome (✓ / ⚠ / ✗) — delete session and stop server
-5. When all steps report their final status (`allStepsDoneMsg`), the TUI transitions to error view showing the generation failure
-6. Dismiss with Enter or Ctrl+C → program exits with error code 1
+## Successful flow
 
-## State matrix
+1. Show the selected list before work proceeds.
+2. Complete collection and generation in dependency order, reporting real statuses.
+3. Finish backend-owned cleanup before presenting candidates.
+4. Preserve the existing 300ms successful transition, then clear progress and show the inline selection list.
+5. Up/Down navigate; Enter selects and clears the list before output. A single candidate auto-selects without displaying a list.
 
-| Surface | Loading | Error | Success | Empty |
-|---------|---------|-------|---------|-------|
-| Progress view | All 5 steps shown; current step shows spinner; completed steps show ✓; pending steps dimmed | Failed step ✗ + error detail below list; dependent steps show `-` (skipped); cleanup steps show their real outcome (✓ / ⚠ / ✗); after `allStepsDoneMsg` transitions to error view; dismiss with Enter/Ctrl+C | All steps ✓; auto-transition to message selection after 300ms; cleanup warnings (⚠) show inline but still auto-transition | Steps all ✓; inline error "no commit messages generated" below list; same dismiss behavior |
-| Message selection | N/A — preceded by progress view | N/A — all errors handled inline on progress view | List of subject line variants (one per line, no body, no status bar); ↑↓ to navigate; Enter to select; list clears before result prints to stdout | N/A — zero messages handled on progress view |
+The final output format and existing list coloring remain unchanged. No success banner or extra harness framing.
 
-Permission-denied, Offline: N/A — local CLI tool, no network auth required.
+## Failure and cleanup
 
-## Voice and tone
-Reference strings:
-- **Error (step 1)**: `Error: opencode server failed to start: connection refused`
-- **Error (step 2)**: `Error: failed to create session: request timeout`
-- **Error (step 3)**: `Error: failed to generate commit messages: context canceled`
-- **Warning (step 4/5)**: `Cleanup issue: failed to delete session`
-- **Empty state**: `Error: no commit messages generated`
-- **Cleanup progress**: `Cleaning up...` (printed to stderr after TUI exits)
-- **Success**: *(silent — selected message is printed to stdout; no success banner)*
+On failure, display concise operation-specific detail and skip dependent operations. Cleanup still runs for acquired resources and reports its actual outcome. Keep the original generation error as primary if cleanup also fails. Rich backend errors retain their detailed rendering without making the view OpenCode-specific.
 
-Voice is direct, technical, English-only. No emoji, no exclamation marks, no personal pronouns.
+After terminal completion, show the error using the existing pause/dismissal behavior. Zero results produce `Error: no commit messages generated`. Output destinations remain unchanged on failure.
 
-## Accessibility targets
-- **WCAG level**: N/A (terminal TUI — text-based by nature; color independence is the primary concern)
-- **Keyboard flow**: Ctrl+C / Esc exits at any point. ↑↓ to navigate message list. Enter to select. Error states: dismiss with Enter or Ctrl+C.
-- **Screen reader**: Step labels are plain text; status indicators (✓ / ✗) are Unicode characters readable by most screen readers. Unicode fallback: `[OK]` / `[FAIL]`. Limitation: status indicators update in-place on existing lines; terminal screen readers that poll may not re-read single-character prefix changes. A future `--a11y` mode could append status lines instead of replacing them.
-- **Motion**: Single spinner character updates — already minimal motion. Running step uses SGR 1 (bold); pending/done use SGR 2 (faint). On terminals without SGR support, structural prefixes degrade gracefully: `>` for running, `  ` for pending, `✓`/`[OK]` for done.
-- **Color independence**: Status is conveyed by characters (✓, ✗, ⚠) and SGR styles, not color alone.
+When generation succeeded but cleanup produced a warning, display `Cleanup issue: <detail>` with the warning indicator and keep candidates available. Quiet/non-TTY callers receive the warning on stderr. If the TUI was canceled or failed before cleanup ended, later cleanup warnings still reach stderr. All warnings are logged; none enter commit-message stdout/file. Successful selection/output still exits 0.
 
-## Platform / harness constraints
-- Terminal width: minimum 40 columns. Below 40 columns: show "Error: terminal too narrow. Minimum width: 40 columns." and exit.
-- Framework: bubbletea + bubbles (spinner, list)
-- Output: `/dev/tty` for TUI; stderr fallback when TTY unavailable. Status/cleanup messages printed to stderr outside TUI.
-- OS: Linux, macOS (existing platform support)
+## Quiet, non-TTY and cancellation
+
+Quiet hides progress, not selection or warnings. Non-TTY single-result mode uses the same workflow without a TUI and emits output only after cleanup. Non-TTY multi-result requests retain the existing early rejection.
+
+Esc/Ctrl+C cancel using the existing interaction behavior. Cancellation produces no message and does not skip resource cleanup. Resource handling remains outside the TUI; main waits for the shared operation after the UI returns if necessary.
+
+## Accessibility and constraints
+
+- Keep text/structural status indicators in addition to color and the existing Unicode/SGR handling.
+- Preserve existing keyboard behavior, minimum 40-column handling, spinner motion and inline-list dimensions.
+- TUI uses `/dev/tty` with the existing fallback. stdout remains plain selected-message text.
+- In-place progress updates may not be announced by polling screen readers; no new accessibility mode is introduced.
+- Authentication, provider connectivity, native search-helper availability and timeouts follow the harness UX contract; offline Pi still makes model requests.
 
 ## Non-goals
-- Non-TTY mode progress output (stays silent as today)
-- Retry mechanism on step failure
-- Progress percentage or time estimates
-- Customizable step labels
-- Step timing information
-- Parallel step execution display
+
+Progress percentages, timing estimates, parallel-step displays, customizable labels, new model/auth dialogs and a retry button are not introduced. Pi's bounded automatic format corrections belong to generation, not a generic failed-step retry mechanism.

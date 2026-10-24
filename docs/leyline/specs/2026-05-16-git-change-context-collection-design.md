@@ -9,8 +9,9 @@ This weak context lowers commit message quality because the agent does not
 receive a structured, high-signal representation of staged changes.
 
 ## Goals
-- Add a first pipeline step before starting the OpenCode server: collecting
-  information about current changes.
+- Collect information about current changes as the shared first step before
+  starting either selected harness. Harness orchestration follows
+  `2026-10-24-pi-harness-design.md`; the Git command/payload contract is unchanged.
 - Run a fixed set of git commands and capture real output, stderr, and exit
   code for each command.
 - Build a single JSON context payload in the agreed format and pass it into
@@ -82,8 +83,8 @@ receive a structured, high-signal representation of staged changes.
 ## Operational concerns
 - Rollback path: if collection causes reliability issues, bypass by reverting
   the feature commit.
-- Ownership: maintainers of `internal/git` and `internal/opencode` own failures
-  in this path.
+- Ownership: the Git collector owns command/payload failures; shared application
+  orchestration passes the same snapshot to either generation backend.
 - Runbook minimum:
   - identify failing command ID from logs.
   - if required command fails, fix repository/runtime precondition and rerun.
@@ -132,7 +133,7 @@ execution/truncation, and minimal duplication across TTY and non-TTY flows.
   are fully specified.
 
 ## Success criteria
-- New pre-server step runs and collects staged-change context.
+- Shared pre-generation step runs and collects staged-change context for Pi and OpenCode.
 - JSON payload matches the required structure with real command results.
 - Output truncation behavior is implemented exactly for outputs > 200000 bytes.
 - Prompt generation uses the new provided template with embedded JSON context.

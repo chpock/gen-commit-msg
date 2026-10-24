@@ -15,7 +15,7 @@ Shell redirection (`gen-commit-msg > /tmp/msg`) already works for scripting beca
 - When set, the selected commit message is written to the file instead of stdout
 - When not set (default `""`), behavior is unchanged — output goes to stdout
 - If the file cannot be created or written, exit with a clear error message
-- Validate the output path early (before server start) so unwritable-path errors surface immediately
+- Validate the output path early (before either harness starts) so unwritable-path errors surface immediately
 
 ## Non-goals
 
@@ -58,7 +58,7 @@ Trade-offs: more complex, user didn't ask for it, can be added later if needed.
 | File | Change |
 |------|--------|
 | `internal/config/config.go` | Add `Output string` field, `--output`/`-o` flag in `initFlags()`, resolve from `GCM_OUTPUT` env in `ParseFlags()`. Add `ValidateOutputPath()` method that checks writability. |
-| `cmd/gen-commit-msg/main.go` | After config parsing, call `cfg.ValidateOutputPath()` before server start (both TUI and non-interactive paths). Both TUI and non-interactive paths use `writeSelectedMessage`, which checks for empty selection before opening the output destination, writes the message and newline, and closes the file. Non-interactive output failures call `cleanup()` explicitly before `pauseExit` to ensure server/session teardown. |
+| `cmd/gen-commit-msg/main.go` | After config parsing, call `cfg.ValidateOutputPath()` before server start (both TUI and non-interactive paths). Both TUI and non-interactive paths use `writeSelectedMessage`, which checks for empty selection before opening the output destination, writes the message and newline, and closes the file. Both CLI modes complete backend-owned cleanup through the shared generation operation before selection/output; output failures cannot bypass that cleanup. See `2026-10-24-pi-harness-design.md`. |
 | `internal/config/config_test.go` | Add test for `--output` flag resolution, env var, default. Add tests for `ValidateOutputPath` (writable path, non-existent parent, permission denied). |
 | `cmd/gen-commit-msg/output_test.go`, `cmd/gen-commit-msg/cli_test.go` | Verify successful creation/overwrite, unchanged existing output and absent new output on empty selection, and surfaced open/write failures. Subprocess tests cover stdout/file routing and preservation on early exits. |
 

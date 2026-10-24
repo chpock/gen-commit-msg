@@ -12,6 +12,7 @@ import (
 )
 
 type Config struct {
+	Harness      string
 	SubjectMin   uint
 	SubjectMax   uint
 	Body         bool
@@ -32,11 +33,12 @@ func initFlags() *flag.FlagSet {
 	flags.UintP("subject-max", "x", 5, "maximum number of subject variants")
 	flags.Bool("body", true, "generate message body")
 	flags.BoolP("quiet", "q", false, "suppress progress output")
-	flags.StringP("agent", "a", "gen-commit-msg", "opencode agent name")
+	flags.String("harness", "auto", "generation harness: auto, pi, opencode")
+	flags.StringP("agent", "a", "gen-commit-msg", "agent name (OpenCode-only)")
 	flags.StringP("log-level", "l", "none", "log verbosity: trace, debug, info, warn, error, none")
 	flags.String("log-file", "", "log output file (default: stderr)")
 	flags.String("pause", "on-error", "pause before exit: on, off, on-error")
-	flags.String("install-agent", "if-not-exists", "agent install behavior: always, if-not-exists, no")
+	flags.String("install-agent", "if-not-exists", "agent install behavior (OpenCode-only): always, if-not-exists, no")
 	flags.StringP("output", "o", "", "write commit message to file instead of stdout")
 	flags.BoolP("version", "V", false, "print version and exit")
 	flags.BoolP("help", "h", false, "print help and exit")
@@ -59,6 +61,15 @@ func ParseFlags() (*Config, error) {
 		cfg.LogLevel = "none"
 		slog.Debug("version or help flag set, skipping config resolution")
 		return cfg, nil
+	}
+
+	cfg.Harness = getStringFlagOrEnv(flags, "harness", "GCM_HARNESS", "auto")
+	switch cfg.Harness {
+	case "auto", "pi", "opencode":
+	default:
+		err := fmt.Errorf("harness must be one of auto, pi, opencode, got %q", cfg.Harness)
+		slog.Error("invalid harness configuration", "harness", cfg.Harness, "error", err)
+		return nil, err
 	}
 
 	cfg.SubjectMin = getUintFlagOrEnv(flags, "subject-min", "GCM_SUBJECT_MIN", 1)

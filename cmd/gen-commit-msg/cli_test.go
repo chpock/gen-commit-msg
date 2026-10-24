@@ -122,7 +122,7 @@ func TestNonInteractiveSuccessCleansUp(t *testing.T) {
 			}
 			dir := newCLIRepository(t, true)
 			logPath := filepath.Join(t.TempDir(), "cli.log")
-			args := []string{"--subject-max", "1", "--pause", "off", "--install-agent", "no", "--log-level", "info", "--log-file", logPath}
+			args := []string{"--harness", "opencode", "--subject-max", "1", "--pause", "off", "--install-agent", "no", "--log-level", "info", "--log-file", logPath}
 			outputPath := filepath.Join(t.TempDir(), "message.txt")
 			if destination == "file" {
 				args = append(args, "--output", outputPath)

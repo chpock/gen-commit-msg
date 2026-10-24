@@ -17,24 +17,31 @@ make all        # fmt → vet → lint → test → build  (correct pre-commit o
 Single-binary Go CLI. Entrypoint: `cmd/gen-commit-msg/main.go`.
 
 ```
-cmd/gen-commit-msg/main.go    — orchestrator (parse config, check git, start OpenCode server, run TUI)
+cmd/gen-commit-msg/main.go    — prechecks, harness selection, shared generation and TUI/output
 internal/config/              — flag/env parsing via pflag; flags override GCM_* env vars
-internal/git/                 — execs `git rev-parse --git-dir` and `git diff --staged --quiet`
-internal/agent/               — writes agent prompt .md files to ~/.config/opencode/agents/
-internal/server/              — spawns `opencode serve`, parses listen URL from stdout, health-checks
-internal/opencode/            — SDK client for OpenCode sessions (create, prompt, parse JSON, delete)
-internal/tui/                 — Bubble Tea TUI: spinner → list of commit messages → selection
+internal/generation/          — common messages, instructions, prompt/schema and progress
+internal/harness/             — executable lookup and retained-path selection
+internal/pi/                  — sessionless Pi RPC, validation, correction and process cleanup
+internal/opencode/            — OpenCode generation and SDK session/prompt client
+internal/agent/               — OpenCode agent prompt installation and customization
+internal/server/              — OpenCode server startup, health checks and completed shutdown
+internal/git/                 — repository/staged checks and structured change-context collection
+internal/tui/                 — harness-neutral Bubble Tea progress and message selection
 ```
+
+Each backend owns its resources and completes cleanup before returning candidates;
+TTY selection and non-TTY output follow the same shared generation operation.
 
 ## Config precedence
 
-CLI flag > `GCM_*` env var > default. Key env vars: `GCM_SUBJECT_MIN`, `GCM_SUBJECT_MAX`, `GCM_BODY`, `GCM_QUIET`, `GCM_AGENT`, `GCM_LOG_LEVEL`, `GCM_LOG_FILE`, `GCM_PAUSE`, `GCM_INSTALL_AGENT`, `GCM_OUTPUT`.
+CLI flag > `GCM_*` env var > default. Key env vars: `GCM_HARNESS`, `GCM_SUBJECT_MIN`, `GCM_SUBJECT_MAX`, `GCM_BODY`, `GCM_QUIET`, `GCM_AGENT`, `GCM_LOG_LEVEL`, `GCM_LOG_FILE`, `GCM_PAUSE`, `GCM_INSTALL_AGENT`, `GCM_OUTPUT`.
 
 ## Runtime dependencies
 
-- `opencode` binary must be in PATH — this tool starts an OpenCode server process
-- `git` must be available and the CWD must be inside a git repo with staged files
-- Interactive TUI mode requires a TTY (stdout); non-TTY falls back to `--subject-count 1` output
+- Generation uses `pi` (1.4.0+) or `opencode` from PATH. `--harness auto` prefers Pi; selected-harness failures do not trigger fallback.
+- `git` must be available and the CWD must be inside a git repo with staged files.
+- Interactive selection requires a TTY (stdout). Non-TTY generation requires `--subject-max 1`; larger ranges are rejected rather than silently changed.
+- When changing Pi startup or tools, consult [Pi configuration and prerequisites](README.md#pi) for model/authentication, search helpers and read-only isolation limits.
 
 ## Testing
 

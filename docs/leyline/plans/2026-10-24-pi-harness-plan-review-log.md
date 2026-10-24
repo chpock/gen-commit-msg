@@ -154,3 +154,90 @@ R1 correction: quiet errors now display the existing Enter instruction only when
 The same independent reviewer fresh-read the corrected branch and PTY matrix and returned **Merge verdict: OK**. R1 is closed; no prior actionable findings or new defects remain in the correction's blast radius. The reviewer had no test runner, so runtime evidence is explicitly parent-run; its source review and fresh diagnostics are independent. Closure evidence: `opencode-checkpoint-r1-review.md` in the established task directory.
 
 Step 2 is accepted at its checkpoint: the production OpenCode workflow, shutdown correction, neutral TUI and CLI integration pass their focused checks, full `make all`, real-PTY regressions and independent review. The authorized checkpoint commit may now be created. This acceptance does not claim Pi implementation or final feature validation: Steps 3–6, native helper/missing-helper execution and authenticated Pi smoke testing remain required.
+
+## Checkpoint commit and next component handoffs
+
+- Created the operator-authorized OpenCode checkpoint commit `98ea46a` (`refactor(opencode): unify generation and cleanup workflow`) after Step 2 checks and independent review closed S1/R1. The working tree was clean afterward. No push occurred; further commits remain unauthorized.
+- The configuration/selection component adds the harness flag/environment precedence, invalid-value handling, native PATH discovery and an absolute retained executable path. Existing OpenCode subprocess fixtures are explicitly pinned before application auto selection is enabled. Behavioral lookup tests cover both/either/neither executable, explicit modes, lookup errors, no runtime invocation and retained-path execution after PATH changes. Focused race checks, `make all` and whitespace checks passed.
+- The pure Pi validator accepts only the approved object/field/type/count/body/subject contract without changing OpenCode decoding or adding writing-style rejection. Behavior-first tables cover accepted values and 52 invalid cases; focused race checks, `make all`, scoped diagnostics and whitespace checks passed. It does not implement process/RPC behavior or establish final Pi acceptance.
+- Parent fresh-source inspection confirmed the selector and validator match their component contracts. Independent component review and Pi process/RPC implementation are next. CLI factory wiring, runtime no-fallback/ignored-option/precheck acceptance, native helper execution and real-model smoke testing remain pending.
+- Durable component evidence: `harness-selection-handoff.md` and `pi-validation-handoff.md` in the established task directory. Pi protocol research anchors are in `pi-rpc-implementation-anchors.md`; the actual installed versioned source, not simplified historical probe code, is authoritative for message extraction and lifecycle behavior.
+
+## Pi RPC component and application wiring
+
+The Pi generator component implements the approved version/readiness, one-process RPC, strict completion/correction and independent cleanup policies. Writer-run stress/fixture checks and `make all` passed; the parent fresh-read the production source and reran the Pi race suite successfully. This is implementation evidence, not native/model acceptance.
+
+Fresh independent backend review returned **BLOCK** with two diagnostic findings. The parent verified both against `internal/pi/process.go`/`protocol.go`, the installed Pi initialization path and the native-recovery fixture:
+
+- **P1 (reviewer severity), lost stderr:** process stderr is copied to `io.Discard`, so startup failures before RPC lose their actual explanation even from logs. Confirmed required defect. Retain bounded failure diagnostics for structured logging, without raw stdout/TUI forwarding or changing primary-error/cleanup semantics.
+- **P2, lost handled failures:** recovered assistant errors and native retry/tool/compaction failure details disappear when a later response succeeds. Confirmed required logging defect. Log selected actual failure diagnostics without dumping protocol records or turning recoverable tool events into generation failures/corrections.
+
+Both corrections are within the existing logging/UX contract and require behavioral logging regressions plus the same reviewer's narrow recheck. No new architecture, permission, fallback or timeout policy is authorized by these findings. Evidence: `pi-rpc-component-review.md` and `pi-rpc-generator-handoff.md` in the established task directory.
+
+The parent integrated the selector with exactly one backend factory after application prechecks, retaining resolved executable paths and OpenCode deletion budgets. New real-application subprocess/PTY tests first reproduced old OpenCode-only wiring, then passed Pi selection, no-fallback failures, exact correction/lifecycle counters, ignored agent-install side effects, output preservation, signal cancellation and cleanup-before-output. `make all`, focused CLI race checks, scoped diagnostics and whitespace checks pass. Application integration still needs independent review; documentation/packaging and native/model delivery gates remain pending. Evidence: `pi-cli-integration-handoff.md`.
+
+### Pi diagnostics closure and application acceptance
+
+Both diagnostic findings are fixed and the same independent reviewer returned **Merge verdict: OK**, with no new actionable issues. The parent fresh-read the bounded stderr capture and selected native-event logging and reran all focused diagnostic race regressions successfully. Earlier stdout/TUI, acceptance, correction, cancellation and cleanup semantics remain unchanged. Retention is bounded to recent 16 KiB of stderr; truncation/total bytes are explicit, and optional diagnostic metadata is not a new protocol requirement. Evidence: `pi-diagnostics-handoff.md` and `pi-diagnostics-review.md`.
+
+The separate fresh application review also returned bounded **OK**, without findings. Deterministic selection, retained paths, ignored OpenCode options, prechecks, warnings/output/PTY and signal wiring are accepted at their integration gate. This does not substitute for actual native-Pi/model validation.
+
+### Documentation and AUR artifacts
+
+README now describes Pi/OpenCode selection, no fallback, Pi minimum/model/auth/isolation/read-only limitations, helper prerequisites/offline behavior, prompt/time budgets, cleanup warnings and shared workflow. Existing editor integration is preserved. Both AUR templates retain mandatory dependencies and list Pi/OpenCode as alternatives; the Pi entry uses actual `pi-coding-agent-bin>=1.4.0`, verified against authoritative AUR RPC/PKGBUILD (upstream v1.4.0 and `/usr/bin/pi`), not an invented package name.
+
+Both templates pass Bash syntax and native `makepkg --printsrcinfo` checks; the metadata places both harnesses only in optdepends. An initial makepkg invocation used a path outside its required package working directory and was corrected; both proper-directory checks pass. No package was built, installed or published. The exact-tree `make all` and whitespace checks pass after these changes. Fresh documentation/artifact review and native/helper/model validation remain pending.
+
+### Documentation review and actual native-Pi evidence
+
+Fresh independent README/AUR review returned **OK with notes**, without defects; the reviewer verified actual installed Pi contracts and freshly fetched the authoritative AUR PKGBUILD. The remaining notes are validation boundaries, not unresolved documentation findings. README subsequently documents the actual optional native command and its Node/preload/helper prerequisites; that small addition is included in final review.
+
+The optional native fixture now runs the actual application `main()` in an isolated subprocess against installed Pi 1.4.0 and a local API. The parent fresh-read both maintained test/observer files and independently reran all six cases successfully. Actual cached rg/system fd searches, native missing-helper errors, no management/helper download attempt, instruction/resource suppression, same-conversation correction with a deliberately changed Git index, real PTY selection/cancellation and completed processes are observed rather than inferred from declarations. Test-only fetch observation is positively checked and scoped to the installed management/helper global-fetch path; it is not an OS network firewall. Both operator credentials and remote model traffic are excluded.
+
+Per full six-case run: six version and six RPC processes; seven application prompts/acceptances/non-aborted settlements; twelve local API requests; eight real search executions; twenty native tool calls with two expected missing-helper errors; zero persisted sessions, fallback executions, external management/helper fetch attempts or surviving observed PIDs. The fixture-only no-match negative control fails despite unchanged declarations and a later valid answer. Evidence and exact per-case counters: `native-pi-validation-handoff.md`.
+
+The native worker's focused/ordinary race suites, Node syntax, `make all` and whitespace checks pass; parent native race rerun also passes. The final fresh review will inspect these native files with the assembled feature. The authenticated standalone-binary/model smoke remains pending; localhost evidence is not substituted for it.
+
+### Authenticated standalone-binary smoke
+
+The parent ran the built standalone application against a private Git index containing actual changed `main.go`, configuration and selector sources. The ordinary Pi provider/model/auth/thinking settings were preserved; no credentials were inspected, login performed or settings changed. An observation-only Node stdout tap recorded selected metadata while forwarding protocol bytes unchanged. Explicit output/count/pause arguments prevented inherited application settings from routing smoke output to an operator file.
+
+Observed result: exit 0; provider `openai-codex`, model `gpt-6.1-sol`, thinking `high`; one version process, one RPC process, one accepted application prompt, one successful assistant message (`stop`), one non-aborted settlement, empty stderr and no surviving owned native PID. The model produced `feat(cli): add Pi and OpenCode harness selection`, which accurately describes the staged configuration/selection/factory subset. The real Git index remained byte-for-byte unchanged. No application corrective prompt was needed; localhost/native counters are separate from this authenticated smoke. Model usage reported 9037 total tokens; no claim of exhaustive provider/model coverage is made.
+
+Credential-free evidence: `authenticated-smoke/result.json` in the established task directory; controller: `run-authenticated-smoke.py`. The real-model delivery gate is now run and passing. Final independent assembled-feature review and the final exact-tree repository gate remain pending.
+
+### Final assembled review and exact-tree gates
+
+Fresh independent assembled-feature review returned **OK with notes**, with no P0/P1/P2 findings and no new architectural decision. It fresh-read the fourteen untracked feature files, native Go/CJS fixture, integrated contracts and actual authenticated result. Notes explicitly distinguish parent/worker-run tests from independent source/authoritative-contract checks and limit native/model evidence to the exercised installation/model. Evidence: `pi-feature-final-review.md`.
+
+The parent then completed the frozen-tree delivery gates: `make all` (fmt, vet, lint with zero issues, all twelve package race suites and standalone build), tracked/untracked Git whitespace checks, Node observer syntax, empty real staging area and intended-file inventory. The final source has no unresolved implementation or required-validation finding. HEAD remains the sole authorized checkpoint `98ea46a`; later feature changes are uncommitted and no push occurred.
+
+### Additional documentation scope question
+
+Final inventory inspection confirmed that unchanged `AGENTS.md:20–26,31,35–37` still describes an OpenCode-only architecture/dependency and legacy non-TTY flag behavior. These maintainer-guidance sections were not named in the plan's README/help/AUR documentation edits. The parent has not silently expanded the file scope. Operator decision requested: either authorize a narrow factual refresh of Architecture, Config precedence and Runtime dependencies (no development-rule/policy changes), or leave that maintenance outside this completed implementation plan. This is not an application defect or a failed required gate.
+
+### Maintainer-guidance scope decision
+
+The operator authorized the recommended narrow documentation refresh. Updated only `AGENTS.md` Architecture, Config precedence and Runtime dependencies: both backends/shared lifecycle, `GCM_HARNESS`, optional runtime selection/no fallback, and actual non-TTY `--subject-max 1` requirement. Other sections, including commands, development workflow and logging policies, are unchanged. Added this explicit documentation scope to plan Step 5. No runtime behavior, model setting, dependency or permission decision changed. A targeted document-only final recheck remains; all application/native/model results remain applicable because executable code is unchanged.
+
+### Delivery closure
+
+The same final reviewer fresh-read the approved maintainer-guidance update and returned **Document-recheck: OK / Merge verdict: OK**, without factual/instruction defects or remaining actionable findings. The byte-scope and whitespace checks pass. Only documentation and review/status records changed after the last successful full application gate; executable code, native fixture and model/runtime configuration are unchanged, so those results remain valid without redundant model calls. Evidence: `agent-guidance-review.md`.
+
+All plan implementation and required delivery gates are complete. Accepted limitations remain: Pi read-only tools do not enforce repository confinement; ordinary global Pi runtime/configuration effects remain; search helpers are optional and may return native errors; diagnostic retention is bounded. Native verification covers installed Pi 1.4.0 and the authenticated smoke covers the selected `openai-codex/gpt-6.1-sol` setup, not every provider/future release. No real-model OpenCode run or AUR package build/install/publication is claimed; the approved OpenCode process/SDK/application/PTY and AUR artifact gates passed.
+
+Publication state: `98ea46a` is the authorized OpenCode-refactor checkpoint. Later Pi/documentation/test changes are intentionally uncommitted and unstaged. No push, installation, deployment, credential inspection or manual model/auth reconfiguration occurred. No unresolved defect, failed required check or open scope decision remains within this task.
+
+### Model/thinking documentation clarification
+
+README's Pi section and the product configuration contract now explicitly state the existing behavior: no application-specific model/thinking flags or environment variables, no corresponding Pi CLI arguments or RPC changes, ordinary Pi user-level startup selection, and no inheritance from another open session or disabled project settings. Clarified that `enabledModels`, per-model `modelThinkingLevels` and model capabilities also participate, rather than promising exclusive use of `default*` fields. README includes `/thinking` plus `Ctrl+S` for saving a startup level.
+
+Verified against the application invocation/minimal RPC commands and installed Pi 1.4.0 `main.js::buildSessionOptions`, startup settings/model-scope resolution, SDK thinking selection and model/settings documentation. This is a documentation clarification, not a new model/provider policy or runtime change. No model request, application code change, commit or push was made; executable validation results remain applicable.
+
+### Authorized Pi feature commit — 2026-10-24
+
+The operator authorized a local commit of the completed Pi feature, including the explicit model/thinking documentation, after the separately committed OpenCode checkpoint `98ea46a`. Prior independent component, assembled-feature and document review findings remain closed; no runtime code changed after their acceptance.
+
+Fresh pre-commit checks pass: scoped Go diagnostics (zero errors/warnings), `make all` (fmt, vet, lint, complete race-enabled suite and standalone build), `GCM_TEST_NATIVE_PI=1 go test -count=1 -race -v ./cmd/gen-commit-msg -run '^TestNativePi'`, native observer Node syntax, both AUR shell syntax/`makepkg --printsrcinfo` checks and Git whitespace validation. Native checks use the isolated local API without operator credentials or paid requests. The earlier authenticated smoke remains valid on the unchanged executable source and was not repeated.
+
+The commit contains only the reviewed feature source, regression/native fixtures, configuration, README/maintainer guidance, AUR metadata and specification/plan records. No push, package installation or deployment is authorized or performed.

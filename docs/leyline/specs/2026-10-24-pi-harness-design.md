@@ -27,6 +27,7 @@ Precedence is explicit flag, nonempty environment value, then default. An invali
 - No-staged-files exits and non-TTY multi-result rejection happen before starting or probing a generation runtime.
 - Pi ignores OpenCode-only `--agent`, `--install-agent` and their environment settings, installs no agent and logs the ignored configuration. Document this scope in help/README.
 - Preserve ordinary Pi global model/provider/thinking, authentication and runtime settings. Do not add an application model flag or separate Pi configuration directory.
+- The application has no separate model/thinking flags or environment variables, passes neither `--model` nor `--thinking`, and does not change them through RPC. Each invocation uses Pi's ordinary startup selection from user settings, including `defaultProvider`, `defaultModel`, `defaultThinkingLevel`, `enabledModels`, per-model `modelThinkingLevels` and supported thinking-level limits. The effective choice is not restricted to the `default*` fields. Do not inherit the current selection from another open Pi session; project settings remain disabled.
 
 ## Shared generation boundary
 

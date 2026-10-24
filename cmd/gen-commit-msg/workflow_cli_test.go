@@ -116,7 +116,7 @@ func newWorkflowFixture(t *testing.T, scenario workflowScenario) *workflowFixtur
 
 func (f *workflowFixture) command(t *testing.T, dir string, args ...string) *exec.Cmd {
 	t.Helper()
-	base := []string{"--pause", "off", "--install-agent", "no", "--log-level", "none"}
+	base := []string{"--harness", "opencode", "--pause", "off", "--install-agent", "no", "--log-level", "none"}
 	cmd := newCLICommand(t, dir, append(base, args...)...)
 	cmd.Env = append(cmd.Env, "PATH="+f.binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return cmd

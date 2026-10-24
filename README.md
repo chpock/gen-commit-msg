@@ -1,8 +1,8 @@
 # gen-commit-msg
 
 `gen-commit-msg` is a Go CLI that generates Git commit message candidates from
-staged changes using OpenCode, then lets you pick the best one in a terminal
-UI (or outputs one message in non-interactive mode).
+staged changes using Pi or OpenCode, then lets you pick the best one in a
+terminal UI (or outputs one message in non-interactive mode).
 
 The tool is built for editor-first commit workflows: generate inside the commit
 message editor, review, then edit before finalizing the commit.
@@ -27,17 +27,80 @@ via `--output`).
 ## Features
 
 - Collects structured staged-change context via Git before prompting AI.
-- Starts and stops `opencode serve` automatically (with health checks).
-- Creates and reuses a dedicated OpenCode agent prompt file.
+- Automatically prefers Pi when available, or uses OpenCode if Pi is absent.
+- Supports explicit `--harness pi` and `--harness opencode` selection.
+- Owns runtime startup and cleanup before selection or output.
+- Uses a sessionless Pi RPC process with read-only tools and strict JSON checks.
+- Starts `opencode serve` and manages its dedicated agent and session.
 - Interactive progress view for pipeline steps in TTY mode.
 - Subject selection list when multiple candidates are generated.
 - Non-interactive mode support (`--subject-max 1`) for scripts/editor callbacks.
 - Config via flags and `GCM_*` environment variables.
 - Optional output file mode (`--output` / `GCM_OUTPUT`).
 
-## Agent installation and customization
+## Harness selection and configuration
 
-On startup, the tool ensures an OpenCode agent file exists.
+`--harness auto` (the default) selects `pi` when its executable is in `PATH`,
+otherwise `opencode`. If both are installed, Pi is preferred. Use
+`--harness opencode` to retain the OpenCode workflow.
+
+Once selected, a harness never falls back to the other one after a version,
+authentication, generation, timeout or invalid-response error. Configure and
+log in to your chosen harness separately before using this tool.
+
+### Pi
+
+Pi **1.4.0 or newer** is required; older or unrecognizable versions are rejected
+before sending Git context. Pi uses its ordinary global model, provider,
+thinking, authentication and runtime settings. In Pi, use `/login`, choose a
+model with `/model`, and save a default with `Ctrl+S` when needed. Use `/thinking`
+and `Ctrl+S` to save its startup thinking level. Compatible endpoints in
+`models.json` remain supported; extension-provided models are not available
+because extensions are disabled.
+
+**There is no separate model or thinking selection for `gen-commit-msg`.** It
+has no application-specific model/thinking flags or environment variables,
+passes neither `--model` nor `--thinking` to Pi, and does not change them through
+RPC. Each invocation uses Pi's normal startup selection from user settings,
+including `defaultProvider`, `defaultModel`, `defaultThinkingLevel`,
+`enabledModels` and per-model `modelThinkingLevels`. Pi also limits thinking to
+the selected model's capabilities; the effective choice is not determined by
+the `default*` fields alone.
+
+The model/thinking currently selected in another open Pi session is not
+inherited. Project settings do not affect this selection because they are
+disabled for the application-launched Pi process.
+
+The application passes its embedded instructions directly, disables discovered
+instructions, extensions/MCP, skills, prompt templates and project settings,
+and uses one `--mode rpc --no-session` process. It creates no Pi agent or
+persisted conversation. Ordinary Pi configuration side effects, credential
+helpers and authentication refresh are not disabled.
+
+Only Pi's native `read`, `grep`, `find` and `ls` tools are enabled:
+
+- `grep` needs cached or system `rg` (ripgrep).
+- `find` needs cached or system `fd` (or `fdfind`).
+- Pi checks its agent-directory `bin` cache before `PATH`.
+- `--offline` disables missing-helper/package/catalog downloads, not model
+  requests. Missing helpers produce ordinary tool errors; they do not reject
+  application startup or trigger installation or harness fallback. A valid
+  final answer after a tool error is still accepted.
+
+Read-only tools **do not enforce repository-only path access**. Repository-only
+reading is an instruction, not an operating-system sandbox.
+
+Pi has 30 seconds for version/startup/readiness, 120 seconds for each prompt
+operation including native tools/retries/compaction, and a separate five-second
+shutdown grace before forced termination. A successful but invalid response
+permits at most two corrective prompts in the same conversation. Runtime or
+provider failures do not trigger format corrections.
+
+### OpenCode agent installation and customization
+
+When OpenCode is selected, the tool ensures an OpenCode agent file exists.
+`--agent`, `--install-agent`, `GCM_AGENT` and `GCM_INSTALL_AGENT` apply only to
+OpenCode; Pi ignores them without reading or installing an agent file.
 
 - Default agent name: `gen-commit-msg`
 - Default install mode: `if-not-exists`
@@ -60,9 +123,9 @@ Important behavior:
 
 ## Requirements
 
-- Go 1.26+
+- Go 1.26+ to build from source
 - `git` available in `PATH`
-- `opencode` available in `PATH`
+- Either Pi 1.4.0+ or OpenCode available in `PATH`, with usable model/auth settings
 - Run inside a Git repository
 - Have staged changes (`git add ...`) before running
 
@@ -74,7 +137,11 @@ Build from source:
 make build
 ```
 
-Binary will be created as `./gen-commit-msg`.
+Binary will be created as `./gen-commit-msg`. Install and configure a harness
+separately. On Arch Linux, the optional Pi package is
+[`pi-coding-agent-bin`](https://aur.archlinux.org/packages/pi-coding-agent-bin);
+OpenCode remains an alternative. Search helpers are not mandatory application
+dependencies, but must be available for Pi's `grep`/`find` tools to work.
 
 ## Quick start
 
@@ -82,6 +149,13 @@ Generate up to 5 candidates and choose one:
 
 ```bash
 gen-commit-msg
+```
+
+Choose a harness explicitly:
+
+```bash
+gen-commit-msg --harness pi
+gen-commit-msg --harness opencode
 ```
 
 Generate exactly one candidate (no selection list):
@@ -155,12 +229,13 @@ Flag precedence is:
 
 | Flag | Env var | Default | Description |
 |---|---|---|---|
+| `--harness` | `GCM_HARNESS` | `auto` | `auto`, `pi`, `opencode`; auto prefers Pi |
 | `--subject-min`, `-m` | `GCM_SUBJECT_MIN` | `1` | Minimum subject candidate count |
 | `--subject-max`, `-x` | `GCM_SUBJECT_MAX` | `5` | Maximum subject candidate count (max 20) |
 | `--body` | `GCM_BODY` | `true` | Generate commit body |
-| `--quiet`, `-q` | `GCM_QUIET` | `false` | Hide progress view |
-| `--agent`, `-a` | `GCM_AGENT` | `gen-commit-msg` | OpenCode agent name |
-| `--install-agent` | `GCM_INSTALL_AGENT` | `if-not-exists` | `always`, `if-not-exists`, `no` |
+| `--quiet`, `-q` | `GCM_QUIET` | `false` | Hide progress, not selection or warnings |
+| `--agent`, `-a` | `GCM_AGENT` | `gen-commit-msg` | OpenCode-only agent name |
+| `--install-agent` | `GCM_INSTALL_AGENT` | `if-not-exists` | OpenCode-only: `always`, `if-not-exists`, `no` |
 | `--pause` | `GCM_PAUSE` | `on-error` | Pause before exit: `on`, `off`, `on-error` |
 | `--output`, `-o` | `GCM_OUTPUT` | `""` | Write selected message to file |
 | `--log-level`, `-l` | `GCM_LOG_LEVEL` | `none` | `trace`, `debug`, `info`, `warn`, `error`, `none` |
@@ -175,15 +250,24 @@ Additional runtime env vars:
 
 ## How it works
 
-Pipeline (interactive mode):
+Both interactive and non-interactive runs share one workflow:
 
-1. Collect staged-change context with multiple Git commands.
-2. Ensure OpenCode agent prompt exists.
-3. Start OpenCode server and verify readiness.
-4. Create OpenCode session.
-5. Request structured commit candidates (JSON schema-constrained).
-6. Show candidate subjects; user selects one.
-7. Cleanup session/server and print (or write) selected message.
+1. Check configuration, repository, staged changes and terminal requirements.
+2. Resolve the selected harness executable without starting it.
+3. Collect staged-change context with multiple Git commands.
+4. Run the selected backend:
+   - Pi: verify version/readiness, generate and strictly validate candidates,
+     perform format corrections only when needed, then stop the RPC process.
+   - OpenCode: ensure the agent, start/health-check its server, create a session,
+     request native schema-constrained candidates, then delete/stop resources.
+5. After cleanup, auto-select a single candidate or show a TTY subject list.
+6. Print or write the selected message. Canceling selection leaves output alone.
+
+A cleanup failure after confirmed successful generation is a visible warning,
+not loss of the candidates. Warnings use progress or stderr, never the selected
+message/file; successful output still exits 0. Cancellation suppresses output.
+OpenCode keeps its existing timeout values, with orderly SIGTERM followed by
+five seconds of grace and process-group SIGKILL if shutdown remains incomplete.
 
 The staged context includes summaries (`--name-status`, `--stat`, `--numstat`,
 `--summary`, `--dirstat`) and full staged patch (`git diff --cached ...`).
@@ -220,12 +304,28 @@ Single package tests:
 go test -count=1 -race ./internal/config/
 ```
 
+Optional actual-Pi integration checks:
+
+```bash
+GCM_TEST_NATIVE_PI=1 go test -count=1 -race ./cmd/gen-commit-msg -run '^TestNativePi'
+```
+
+These checks use Node preload observation, a disposable Pi configuration and a
+local model API, not operator credentials or paid model requests. They require
+Node, `rg` and `fd`/`fdfind`. Set `GCM_TEST_NATIVE_PI_PATH` to select the installed
+Node-based Pi CLI explicitly. Ordinary `make all` skips them before looking up
+native prerequisites. The checks cover real tools, missing helpers without
+downloads, instruction isolation, correction and PTY selection/cancellation.
+
 ## Project structure
 
 ```text
 cmd/gen-commit-msg/main.go    # CLI orchestration
 internal/config/              # flags + env parsing
+internal/harness/             # deterministic executable selection
+internal/generation/          # shared messages, instructions and progress
 internal/git/                 # repo checks + staged context collection
+internal/pi/                  # Pi process, RPC, validation and correction
 internal/agent/               # OpenCode agent prompt management
 internal/server/              # opencode serve lifecycle
 internal/opencode/            # OpenCode session/prompt client

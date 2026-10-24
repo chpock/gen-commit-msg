@@ -2,7 +2,7 @@
 
 Date: 2026-10-24
 Baseline: `48c5309`
-Status: implementation authorized and in progress under D1–D14. Oracle confirmed READY TO IMPLEMENT with O1/O2 resolved at the design/scope level. New architecture/scope/trade-off questions require stopping for an operator decision. The operator authorized one verified OpenCode-refactor checkpoint commit followed by continued Pi implementation; pushes and further commits require separate authorization.
+Status: implementation and required delivery checks complete under D1–D14, including the separately approved AGENTS.md technical refresh and explicit model/thinking documentation. Independent assembled-feature and document rechecks pass without unresolved findings. OpenCode checkpoint committed as `98ea46a`; the operator also authorized the completed Pi feature's local commit. No push or deployment is authorized.
 
 ## 1. Decision surface and implementation gate
 
@@ -322,6 +322,7 @@ Run focused tests, then `make all`.
 - Wire declared steps into the existing progress view and retain quiet/single/multiple-result/selection cancellation behavior.
 - Add harness help/README examples and Pi authentication/configuration/version requirements. Document the native search helpers (rg for grep; fd/fdfind for find), Pi cache/PATH lookup, disabled offline downloads and ordinary tool-error behavior when helpers are absent. Do not make these helpers new mandatory package dependencies for all application use.
 - Update both AUR templates' optional harness dependency descriptions after checking the actual Arch package name for Pi. Do not invent a package name or add Pi as a mandatory dependency.
+- Refresh the Architecture, Config precedence and Runtime dependencies sections of `AGENTS.md` to match both harnesses and actual non-TTY behavior; preserve all development and logging policies.
 - Preserve stdout/file output contracts and editor integration examples.
 
 Gate: TUI/CLI integration tests for both harnesses, no-staged and failure paths; output files unchanged until a real message is selected; `make all`.

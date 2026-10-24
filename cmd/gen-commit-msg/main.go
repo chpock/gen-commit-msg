@@ -20,8 +20,10 @@ import (
 	"github.com/chpock/gen-commit-msg/internal/config"
 	"github.com/chpock/gen-commit-msg/internal/generation"
 	"github.com/chpock/gen-commit-msg/internal/git"
+	"github.com/chpock/gen-commit-msg/internal/harness"
 	"github.com/chpock/gen-commit-msg/internal/logging"
 	"github.com/chpock/gen-commit-msg/internal/opencode"
+	"github.com/chpock/gen-commit-msg/internal/pi"
 )
 
 var version = "dev"
@@ -149,7 +151,7 @@ func run() (exitCode int) {
 
 	slog.Debug("gen-commit-msg starting", "version", version,
 		"subject_min", cfg.SubjectMin, "subject_max", cfg.SubjectMax, "body", cfg.Body,
-		"quiet", cfg.Quiet, "agent", cfg.Agent, "log_level", cfg.LogLevel,
+		"quiet", cfg.Quiet, "harness", cfg.Harness, "agent", cfg.Agent, "log_level", cfg.LogLevel,
 		"log_file", cfg.LogFile, "pause", cfg.Pause, "install_agent", cfg.InstallAgent,
 		"output", cfg.Output)
 	isTTY := isTerminal()
@@ -205,6 +207,12 @@ func run() (exitCode int) {
 		return finish(1, true)
 	}
 
+	selection, err := harness.Select(cfg.Harness)
+	if err != nil {
+		slog.Error("failed to select generation harness", "error", err)
+		fmtError("Error: %v\n", err)
+		return finish(1, true)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	signals := make(chan os.Signal, 1)
@@ -219,14 +227,20 @@ func run() (exitCode int) {
 		}
 	}()
 
-	deleteTimeout := 5 * time.Second
-	if isTTY {
-		deleteTimeout = 10 * time.Second
+	var backend generation.Generator
+	if selection.Kind == harness.Pi {
+		slog.Debug("ignoring OpenCode-only options in Pi mode", "agent", cfg.Agent, "install_agent", cfg.InstallAgent)
+		backend = pi.NewGenerator(pi.GeneratorConfig{Executable: selection.Executable, RepoDir: repoDir})
+	} else {
+		deleteTimeout := 5 * time.Second
+		if isTTY {
+			deleteTimeout = 10 * time.Second
+		}
+		backend = opencode.NewGenerator(opencode.GeneratorConfig{
+			Executable: selection.Executable, RepoDir: repoDir, Agent: cfg.Agent,
+			InstallAgent: cfg.InstallAgent, SessionDeleteTimeout: deleteTimeout,
+		})
 	}
-	backend := opencode.NewGenerator(opencode.GeneratorConfig{
-		Executable: "opencode", RepoDir: repoDir, Agent: cfg.Agent,
-		InstallAgent: cfg.InstallAgent, SessionDeleteTimeout: deleteTimeout,
-	})
 	request := generation.Request{SubjectMin: int(cfg.SubjectMin), SubjectMax: int(cfg.SubjectMax), Body: cfg.Body}
 	var selected string
 	if isTTY {

@@ -31,7 +31,7 @@ Precedence is explicit flag, nonempty environment value, then default. An invali
 
 ## Shared generation boundary
 
-A neutral request contains subject minimum/maximum, body preference and serialized Git context. A neutral result contains candidates with the existing subject/body semantics and separate nonfatal cleanup diagnostics. Cancellation and a progress reporter are part of the operation. Backends declare their actual progress steps; the TUI holds no server, client or process reference.
+A neutral request contains subject minimum/maximum, body preference, serialized Git context and optional separately rendered repository instructions. Pi populates the latter; OpenCode retains native discovery and does not opt into application collection. A neutral result contains candidates with the existing subject/body semantics and separate nonfatal cleanup diagnostics. Cancellation and a progress reporter are part of the operation. Backends declare their actual progress steps; the TUI holds no server, client or process reference.
 
 Do not expose application-facing session/server lifecycle methods. Preserve OpenCode's rich error rendering through an error capability rather than a concrete OpenCode field in shared types. Both CLI modes use the same Git collection and generation operation.
 
@@ -55,7 +55,9 @@ pi --mode rpc --no-session
 
 Pass arguments directly, including the genuinely empty append argument. Use the repository working directory. Do not create a Pi agent, instruction file, persisted session, extension or temporary production configuration tree.
 
-These flags isolate discovered instructions/resources and project settings, not all Pi behavior. Global endpoint overrides, retries, compaction, proxy settings, credential helpers, package-root lookup, migrations and credential refresh remain possible. Offline mode blocks automatic catalog/package/helper downloads, not model requests.
+Automatic Pi instruction discovery remains disabled. Before the independent startup budget, the application collects current worktree instructions under caller cancellation with a backend-neutral, caller-selected file profile. Only Pi activates it today. Each staged path contributes its directory and every parent through the actual Git worktree root; both rename endpoints and deleted-path directories count. Sort directories by depth then path. Select the first readable regular file per directory in Pi order: `AGENTS.override.md`, `AGENTS.md`, `AGENTS.MD`, `CLAUDE.md`, `CLAUDE.MD`. Also read `.pi/SYSTEM.md` and `.pi/APPEND_SYSTEM.md` in each applicable directory as additive scoped instructions, not system-prompt replacements. This deliberately differs from native CWD ancestry and project-trust-gated system discovery. Exclude global instructions, strip UTF-8 BOMs, follow symlinks as Pi does, skip absent/nonregular candidates and log read errors before fallback. Do not add a sandbox or size truncation. Failed Git scope discovery is fatal. Send root/source/scope labels and text outside Git-output JSON once; preserve it in the correction conversation. Mandatory application rules, explicit parameters and JSON schema override repository instructions. A future backend may supply a different profile without changing discovery; OpenCode remains unchanged.
+
+These flags isolate native-discovered instructions/resources and project settings, not all Pi behavior. Global endpoint overrides, retries, compaction, proxy settings, credential helpers, package-root lookup, migrations and credential refresh remain possible. Offline mode blocks automatic catalog/package/helper downloads, not model requests.
 
 Native tools are read-only but not restricted to repository paths by an enforced boundary. Repository-only access is an instruction. Do not add path confinement or a sandbox.
 

@@ -71,11 +71,37 @@ The model/thinking currently selected in another open Pi session is not
 inherited. Project settings do not affect this selection because they are
 disabled for the application-launched Pi process.
 
-The application passes its embedded instructions directly, disables discovered
-instructions, extensions/MCP, skills, prompt templates and project settings,
+The application passes its embedded instructions directly, disables automatic
+instruction discovery, extensions/MCP, skills, prompt templates and project settings,
 and uses one `--mode rpc --no-session` process. It creates no Pi agent or
 persisted conversation. Ordinary Pi configuration side effects, credential
 helpers and authentication refresh are not disabled.
+
+#### Repository instructions
+
+The application collects current repository instruction files for Pi and sends
+them separately from Git-output JSON. It searches the directory of each staged
+path and every parent through the Git worktree root, never above it. Renames
+include both source and destination scopes; unrelated directories are not scanned.
+
+In each directory, the first readable regular file wins, in Pi order:
+`AGENTS.override.md`, `AGENTS.md`, `AGENTS.MD`, `CLAUDE.md`, `CLAUDE.MD`.
+The directory's `.pi/SYSTEM.md` and `.pi/APPEND_SYSTEM.md` are also included as
+additive guidance, not replacement system prompts. Parent rules precede child
+rules, with source paths and directory scopes identified. Mandatory application
+rules, explicit generation parameters and the response schema retain priority.
+
+Global Pi instructions are not loaded. Project settings and executable resources
+remain disabled. Instruction files are read from the worktree, not the index;
+missing/nonregular files are skipped and read errors are logged before trying the
+next candidate, like Pi. Symlinks are followed as in Pi: the traversal boundary
+is not a sandbox. Failed Git scope discovery aborts generation. Collection runs
+before Pi's independent startup budget, under caller cancellation. No file-size
+truncation is added. The collected text is retained across corrective prompts.
+
+OpenCode still uses its native instruction discovery; application-side collection
+is currently enabled only for Pi. Its file-set selection is backend-neutral so
+future backends can use different profiles without duplicating discovery.
 
 Only Pi's native `read`, `grep`, `find` and `ls` tools are enabled:
 

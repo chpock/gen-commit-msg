@@ -3,7 +3,7 @@ package generation
 import "fmt"
 
 func BuildPrompt(params Request) string {
-	return fmt.Sprintf(
+	prompt := fmt.Sprintf(
 		"Generate Git commit message candidates for the current staged changes.\n\n"+
 			"Requested output:\n"+
 			"- Minimum subjects: %[1]d\n"+
@@ -34,6 +34,10 @@ func BuildPrompt(params Request) string {
 		params.Body,
 		params.ContextJSON,
 	)
+	if params.RepositoryInstructions != "" {
+		prompt += "\n\n" + params.RepositoryInstructions
+	}
+	return prompt
 }
 
 func ResponseSchema(params Request) map[string]any {

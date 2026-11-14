@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/chpock/gen-commit-msg/internal/generation"
+	"github.com/chpock/gen-commit-msg/internal/repositorycontext"
 )
 
 type GeneratorConfig struct {
@@ -68,6 +69,12 @@ func (g *Generator) Generate(ctx context.Context, request generation.Request, re
 		}
 	}()
 	report.Emit(generation.Update{Index: 0, Status: generation.StepRunning})
+	repository, collectErr := repositorycontext.Collect(ctx, g.config.RepoDir, repositorycontext.PiProfile())
+	if collectErr != nil {
+		err = finishPiStep(report, 0, collectErr)
+		return result, err
+	}
+	request.RepositoryInstructions = repositorycontext.Render(repository)
 	startup, cancel := context.WithTimeout(ctx, g.startupTimeout)
 	startupFinished := logPhase("startup", g.startupTimeout)
 	var warnings []error

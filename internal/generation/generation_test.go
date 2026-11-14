@@ -47,3 +47,16 @@ func TestReporterOptionalAndPreservesUpdate(t *testing.T) {
 		t.Fatalf("reported updates = %+v, want exactly %+v", got, update)
 	}
 }
+
+func TestRepositoryInstructionsAreSeparateFromGitEvidence(t *testing.T) {
+	request := Request{SubjectMin: 1, SubjectMax: 1, ContextJSON: `{"staged":"GIT_EVIDENCE"}`, RepositoryInstructions: "PROJECT_RULES_FROM_APPROVED_FILES"}
+	prompt := BuildPrompt(request)
+	end := strings.Index(prompt, "</commit_message_context_json>")
+	if end < 0 || strings.Index(prompt, request.RepositoryInstructions) < end || strings.Count(prompt, request.RepositoryInstructions) != 1 {
+		t.Fatal("repository instructions were lost, duplicated or mixed into Git-output JSON")
+	}
+	request.RepositoryInstructions = ""
+	if strings.Contains(BuildPrompt(request), "Repository instructions") {
+		t.Fatal("empty repository context altered the existing backend prompt")
+	}
+}

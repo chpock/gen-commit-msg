@@ -24,7 +24,7 @@ All steps for the selected backend are visible initially. The existing indicator
 | 4 | Generating commit messages... | Stopping Pi... |
 | 5 | Cleaning up OpenCode resources... | — |
 
-Pi startup includes version verification and a successful readiness exchange. It does not display a server or session step. Corrective prompts update generation detail, for example `Correcting response format (attempt 2 of 3)`, without inventing extra lifecycle steps.
+The Pi backend first collects directory-scoped repository instructions for staged paths, under caller cancellation and outside the independent startup budget; Git discovery failure is visible as a failed starting step. No new step or flag is introduced. User/global instructions stay excluded. Pi startup includes version verification and a successful readiness exchange. It does not display a server or session step. Corrective prompts update generation detail, for example `Correcting response format (attempt 2 of 3)`, without inventing extra lifecycle steps.
 
 The TUI remains a view. Shared orchestration executes Git collection and the selected backend outside it. Backends own resources and report actual statuses. Failed prerequisites cause skipped steps; existing resources are still cleaned up before the terminal completion message. A generation failure remains the primary displayed error if cleanup also fails.
 

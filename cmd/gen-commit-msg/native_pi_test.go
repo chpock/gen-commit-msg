@@ -281,12 +281,16 @@ func newNativePiFixture(t *testing.T, pi, node, git, rg, fd string, missing, cor
 	nativeJSON(t, filepath.Join(agent, "models.json"), map[string]any{"providers": map[string]any{"gcm-native-fixture": map[string]any{"baseUrl": api.URL + "/v1", "api": "openai-completions", "apiKey": "dummy-localhost-only", "models": []any{map[string]any{"id": "native-fixture", "name": "native-fixture", "reasoning": false, "input": []string{"text"}, "cost": map[string]int{"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}, "contextWindow": 128000, "maxTokens": 4096}}}}})
 	for _, base := range []string{agent, filepath.Join(f.repo, ".pi")} {
 		for _, name := range []string{"AGENTS.md", "SYSTEM.md", "APPEND_SYSTEM.md", "prompts/marker.md", "skills/marker/SKILL.md"} {
-			nativeWrite(t, filepath.Join(base, name), "---\nname: native-marker\ndescription: "+nativeMarker+"\n---\n"+nativeMarker, 0600)
+			marker := nativeMarker
+			if base == filepath.Join(f.repo, ".pi") && (name == "SYSTEM.md" || name == "APPEND_SYSTEM.md") {
+				marker = "REPOSITORY_" + name
+			}
+			nativeWrite(t, filepath.Join(base, name), "---\nname: native-marker\ndescription: "+marker+"\n---\n"+marker, 0600)
 		}
 		nativeWrite(t, filepath.Join(base, "extensions/marker.mjs"), fmt.Sprintf("import fs from 'node:fs'; fs.writeFileSync(%q,'executed'); export default function() {}\n", filepath.Join(f.root, "extension-executed")), 0600)
 		nativeJSON(t, filepath.Join(base, "mcp.json"), map[string]any{"mcpServers": map[string]any{"marker": map[string]any{"command": "/bin/sh", "args": []string{"-c", fmt.Sprintf("printf executed > %q", filepath.Join(f.root, "mcp-executed"))}}}})
 	}
-	nativeWrite(t, filepath.Join(f.repo, "AGENTS.md"), nativeMarker, 0600)
+	nativeWrite(t, filepath.Join(f.repo, "AGENTS.md"), "REPOSITORY_AGENTS_RULES", 0600)
 	return f
 }
 
@@ -405,6 +409,18 @@ func (f *nativePiFixture) assertEvidence(t *testing.T) {
 		t.Fatalf("API requests=%d; want 2", len(requests))
 	}
 	for _, request := range requests {
+		serialized, err := json.Marshal(request.Messages)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(serialized, []byte(nativeMarker)) {
+			t.Error("global or executable-resource instructions leaked into model request")
+		}
+		for _, marker := range []string{"REPOSITORY_AGENTS_RULES", "REPOSITORY_SYSTEM.md", "REPOSITORY_APPEND_SYSTEM.md"} {
+			if !bytes.Contains(serialized, []byte(marker)) {
+				t.Errorf("model request lost repository instructions %q", marker)
+			}
+		}
 		if request.Model != "native-fixture" {
 			t.Errorf("global model default lost: %s", request.Model)
 		}

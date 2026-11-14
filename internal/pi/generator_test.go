@@ -454,6 +454,18 @@ func TestPiFixture(t *testing.T) {
 func newFixture(t *testing.T, scenario string) (*Generator, string) {
 	t.Helper()
 	dir := t.TempDir()
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(git, filepath.Join(dir, "git")); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command(git, "init", "-q", dir).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, output)
+	}
 	binary, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -760,9 +772,10 @@ func TestGeneratorCanceledPromptGetsIndependentCleanup(t *testing.T) {
 }
 
 func TestGeneratorStartFailure(t *testing.T) {
-	g := NewGenerator(GeneratorConfig{Executable: filepath.Join(t.TempDir(), "missing"), RepoDir: t.TempDir()})
+	g, dir := newFixture(t, "valid")
+	g.config.Executable = filepath.Join(dir, "missing")
 	result, err := g.Generate(context.Background(), requestFixture(), nil)
-	if err == nil || len(result.Messages) != 0 {
+	if err == nil || len(result.Messages) != 0 || !strings.Contains(err.Error(), "pi version preflight") {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 }
@@ -904,5 +917,46 @@ func TestGeneratorProductionBudgetsAndSupportedVersion(t *testing.T) {
 		if err := supportedVersion(version); err == nil {
 			t.Errorf("%q accepted", version)
 		}
+	}
+}
+
+func TestRepositoryInstructionsReachInitialPromptAndSurviveCorrection(t *testing.T) {
+	g, dir := newFixture(t, "correct-two")
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("REPOSITORY_RULES_SENTINEL"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.Generate(context.Background(), requestFixture(), nil); err != nil {
+		t.Fatal(err)
+	}
+	prompts := 0
+	for _, event := range fixtureEvents(t, dir) {
+		if event.Kind != "command" || event.Command["type"] != "prompt" {
+			continue
+		}
+		prompts++
+		message, _ := event.Command["message"].(string)
+		if prompts == 1 {
+			if !strings.Contains(message, "REPOSITORY_RULES_SENTINEL") || strings.Index(message, "REPOSITORY_RULES_SENTINEL") < strings.Index(message, "</commit_message_context_json>") {
+				t.Fatal("repository rules missing from instruction section")
+			}
+		} else if strings.Contains(message, "REPOSITORY_RULES_SENTINEL") {
+			t.Fatal("correction unexpectedly resent repository context")
+		}
+	}
+	if prompts != 2 {
+		t.Fatalf("prompts=%d", prompts)
+	}
+}
+
+func TestRepositoryDiscoveryFailureStopsBeforePiLaunch(t *testing.T) {
+	g, dir := newFixture(t, "valid")
+	g.config.RepoDir = t.TempDir()
+	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(g.config.RepoDir))
+	result, err := g.Generate(context.Background(), requestFixture(), nil)
+	if err == nil || len(result.Messages) != 0 {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "events")); !os.IsNotExist(err) {
+		t.Fatalf("Pi was invoked despite failed discovery: %v", err)
 	}
 }

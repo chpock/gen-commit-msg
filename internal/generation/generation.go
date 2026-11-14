@@ -12,10 +12,11 @@ var Instructions string
 const CollectContextStep = "Collecting information about current changes..."
 
 type Request struct {
-	SubjectMin  int
-	SubjectMax  int
-	Body        bool
-	ContextJSON string
+	SubjectMin             int
+	SubjectMax             int
+	Body                   bool
+	ContextJSON            string
+	RepositoryInstructions string
 }
 
 type Message struct {

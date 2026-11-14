@@ -93,11 +93,10 @@ func logNativeDiagnostic(kind string, record rpcRecord, promptID string) {
 	switch kind {
 	case "tool_execution_end":
 		failed, _ := diagnosticBool(record["isError"])
-		if !failed {
-			return
+		if failed {
+			level = slog.LevelWarn
+			detail = toolDiagnostic(record["result"])
 		}
-		level = slog.LevelWarn
-		detail = toolDiagnostic(record["result"])
 	case "auto_retry_start", "summarization_retry_scheduled":
 		level = slog.LevelWarn
 		detail = diagnosticString(record["errorMessage"])
@@ -123,15 +122,24 @@ func logNativeDiagnostic(kind string, record rpcRecord, promptID string) {
 			attrs = append(attrs, field.log, value)
 		}
 	}
-	for _, field := range []struct{ wire, log string }{{"attempt", "attempt"}, {"maxAttempts", "max_attempts"}, {"delayMs", "delay_ms"}} {
+	for _, field := range []struct{ wire, log string }{{"attempt", "attempt"}, {"maxAttempts", "max_attempts"}, {"delayMs", "delay_ms"}, {"durationMs", "duration_ms"}} {
 		var value *int64
 		if json.Unmarshal(record[field.wire], &value) == nil && value != nil {
 			attrs = append(attrs, field.log, *value)
 		}
 	}
-	for _, field := range []string{"success", "aborted", "willRetry"} {
+	for _, field := range []string{"success", "aborted", "willRetry", "isError"} {
 		if value, known := diagnosticBool(record[field]); known {
 			attrs = append(attrs, field, value)
+		}
+	}
+	if kind == "compaction_end" {
+		var result rpcRecord
+		if json.Unmarshal(record["result"], &result) == nil {
+			attrs = append(attrs, diagnosticAttrs(result, nil, []string{"tokensBefore", "estimatedTokensAfter"}, nil)...)
+			if usage := usageAttrs(result["usage"]); len(usage) > 0 {
+				attrs = append(attrs, slog.Group("usage", usage...))
+			}
 		}
 	}
 	slog.Log(context.Background(), level, "Pi native activity", attrs...)

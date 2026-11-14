@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+
+	"github.com/chpock/gen-commit-msg/internal/logging"
 )
 
 type rpcRecord map[string]json.RawMessage
@@ -45,6 +47,9 @@ func (e *exchange) record(ctx context.Context) (rpcRecord, string, error) {
 		return nil, "", err
 	}
 	kind, err := requiredString(record, "type")
+	if err == nil {
+		logRPCActivity(record, kind, e.id, e.process.cmd.Process.Pid)
+	}
 	return record, kind, err
 }
 
@@ -54,7 +59,11 @@ func (p *process) command(id, kind, message string) *exchange {
 		command["message"] = message
 	}
 	data, _ := json.Marshal(command)
-	return &exchange{process: p, written: p.send(append(data, '\n'))}
+	data = append(data, '\n')
+	if slog.Default().Enabled(context.Background(), logging.LevelTrace) {
+		slog.Log(context.Background(), logging.LevelTrace, "Pi RPC command", "pid", p.cmd.Process.Pid, "id", id, "command", kind, "data", string(data))
+	}
+	return &exchange{process: p, written: p.send(data), id: id}
 }
 
 func responseMatches(record rpcRecord, id, command string) (bool, error) {
@@ -111,8 +120,12 @@ func (p *process) ready(ctx context.Context) (err error) {
 			return err
 		}
 		if match {
-			if _, err = requiredObject(record["data"], "get_state data"); err != nil {
+			state, err := requiredObject(record["data"], "get_state data")
+			if err != nil {
 				return err
+			}
+			if slog.Default().Enabled(ctx, slog.LevelDebug) {
+				logSessionState(state, p.cmd.Process.Pid)
 			}
 			return e.finishWrite(ctx)
 		}
@@ -243,7 +256,7 @@ func (p *process) prompt(ctx context.Context, id, message string) (text string, 
 			}
 			settled = true
 			slog.Debug("Pi agent settled", "id", id)
-		case "tool_execution_end", "auto_retry_start", "auto_retry_end", "summarization_retry_scheduled", "summarization_retry_attempt_start", "summarization_retry_finished", "compaction_start", "compaction_end":
+		case "tool_execution_start", "tool_execution_end", "auto_retry_start", "auto_retry_end", "summarization_retry_scheduled", "summarization_retry_attempt_start", "summarization_retry_finished", "compaction_start", "compaction_end":
 			logNativeDiagnostic(kind, record, id)
 		}
 		if accepted && settled {

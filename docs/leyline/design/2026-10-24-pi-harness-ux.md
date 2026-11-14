@@ -58,6 +58,14 @@ Warnings appear in the progress UI when it is visible and otherwise on stderr; t
 
 The output is the chosen subject, optionally a blank line and common body, with the existing final newline. No success banner or harness framing. Existing output validation remains nondestructive, and overwrite happens only for an actual message. Help/version/logging retain their existing channels and configuration semantics.
 
+## Diagnostic logging
+
+`--log-level debug` exposes Pi work as concise lifecycle, effective model/thinking, tool status/duration, retry/compaction, usage/cost and phase timing records. `trace` additionally includes full launch/RPC content and live stderr, including emitted thinking, tool payloads, malformed/unknown records and shutdown output. Native startup timing is best-effort and version-dependent. The existing last-16-KiB stderr tail remains visible after cleanup, normally at DEBUG and escalated to WARN/ERROR for the runtime/exit failures specified in the product spec; it can contain sensitive diagnostics. README warns that TRACE is sensitive and potentially large.
+
+DEBUG/TRACE may wait up to one additional second after each completed application prompt for read-only session statistics, including current context occupancy. Statistics failure is log-only: it does not discard messages, trigger corrections or introduce a cleanup warning. Caller cancellation still suppresses output. No extra model request is made.
+
+All logging retains the configured log destination, with stderr as default. No new TUI steps, protocol content in TUI rendering or commit-message output, or diagnostic content in `--output` is introduced. Configured logs can appear in the terminal through stderr.
+
 ## Verification
 
 Test both backend step lists, generic and rich error rendering, skipped/interrupted/warning states, single/multiple selection, quiet/non-TTY warnings and destination preservation. Verify actual application TTY interactions and native Pi helper execution/missing-helper outcomes as delivery gates, not just rendered strings or tool declarations.

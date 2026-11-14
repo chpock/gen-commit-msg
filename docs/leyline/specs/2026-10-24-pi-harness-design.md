@@ -74,6 +74,16 @@ Native grep requires cached/system `rg`; find requires cached/system `fd` or the
 
 Read LF-delimited records beyond 64 KB, including split pipe writes and Unicode separators inside JSON strings. Tolerate unrelated events while retaining required response/message/completion checks. Keep protocol records and raw stderr out of normal stdout/TUI output.
 
+## Pi diagnostics
+
+DEBUG reports effective readiness model/thinking/state, agent/turn/message and content-block boundaries, tool identity/status/duration, retries/compaction, completed assistant usage/cost and phase budgets/elapsed times. Optional diagnostic metadata never changes protocol acceptance. Activity summaries omit full prompts, thinking text, arguments and successful tool-result payloads; these RPC payloads remain TRACE-only. Retain the last-16-KiB stderr tail after cleanup: normally DEBUG, ERROR when a generation/readiness RPC operation failed or version preflight exited unsuccessfully, and WARN for other abnormal/forced exits. That opaque tail can contain sensitive Pi diagnostics.
+
+TRACE captures launch arguments, exact outgoing JSONL commands, every stdout record at the pipe drain before parsing/discard, and live stderr chunks without payload caps. Include process IDs, stdout termination status and byte counts; preserve invalid UTF-8 bytes through an additional base64 field. Include version preflight, unknown/malformed records and shutdown output. Retain the existing bounded stderr failure tail independently. Enable native `PI_TIMING=1` only in TRACE child environments; treat version-dependent timing output as opaque, best-effort stderr.
+
+At DEBUG/TRACE, query `get_session_stats` after each completed application prompt, including successful-but-invalid output before correction. Use a separate caller-cancelable one-second maximum, not the prompt budget. Correlate responses; log failures without failing generation, discarding candidates or adding cleanup warnings. No extra model call, model/configuration mutation or statistics query at normal log levels.
+
+Full TRACE can expose sensitive repository, prompt, provider-thinking, tool and stderr data and can be large. Document this explicitly. Do not separately dump inherited environment or credential files. Preserve log destinations and keep diagnostics out of commit output and progress. The boundary is native RPC/stderr, not provider HTTP interception or unexposed model internals.
+
 ## Pi output validation
 
 Require exactly one JSON object and no trailing non-whitespace data, fences or extra keys. Require present, non-null correctly typed `subjects` and `body`, string array elements, the inclusive requested candidate count, nonblank single-line subjects without embedded CR/LF, and empty body when body generation is disabled.

@@ -47,10 +47,12 @@ func TestNativePi(t *testing.T) {
 		t.Fatal("native delivery check requires installed fd or fdfind")
 	}
 	for _, tc := range []struct {
-		name                                             string
+		name, logLevel                                   string
 		missing, correction, file, tty, cancel, existing bool
 	}{
 		{name: "cached-rg-system-fd-stdout"},
+		{name: "trace-native-tools", logLevel: "trace"},
+		{name: "debug-native-tools", logLevel: "debug"},
 		{name: "missing-helpers-file", missing: true, file: true},
 		{name: "format-correction", correction: true},
 		{name: "tty-second-selection", tty: true},
@@ -69,6 +71,10 @@ func TestNativePi(t *testing.T) {
 			}
 			if tc.file || tc.tty {
 				args = append(args, "--output", output)
+			}
+			logFile := filepath.Join(f.root, "application.log")
+			if tc.logLevel != "" {
+				args = append(args, "--log-level", tc.logLevel, "--log-file", logFile)
 			}
 			cmd := newCLICommand(t, f.repo, args...)
 			cmd.Env = append(f.env, "GCM_TEST_CLI_PROCESS=1")
@@ -129,6 +135,27 @@ func TestNativePi(t *testing.T) {
 				}
 			}
 			f.assertEvidence(t)
+			if tc.logLevel != "" {
+				data, err := os.ReadFile(logFile)
+				if err != nil {
+					t.Fatal(err)
+				}
+				text := string(data)
+				for _, want := range []string{"Pi session state", "native-fixture", "Pi assistant usage", "Pi session statistics", "tool_name=read", "tool_name=grep", "tool_name=find", "tool_name=ls"} {
+					if !strings.Contains(text, want) {
+						t.Errorf("native %s log missing %q", tc.logLevel, want)
+					}
+				}
+				if tc.logLevel == "trace" {
+					for _, want := range []string{"Pi RPC command", "message_update", "tool_execution_end", "NATIVE_TOOL_SENTINEL", "Startup Timings"} {
+						if !strings.Contains(text, want) {
+							t.Errorf("native TRACE missing %q", want)
+						}
+					}
+				} else if strings.Contains(text, "Pi RPC command") || strings.Contains(text, "Pi process output") {
+					t.Error("raw Pi data leaked to DEBUG")
+				}
+			}
 		})
 	}
 }

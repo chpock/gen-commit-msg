@@ -88,7 +88,7 @@ func TestPiFixture(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	fixtureMark("rpc", map[string]any{"cwd": cwd, "runtime_marker": os.Getenv("GCM_PI_RUNTIME_MARKER")})
+	fixtureMark("rpc", map[string]any{"cwd": cwd, "runtime_marker": os.Getenv("GCM_PI_RUNTIME_MARKER"), "timing": os.Getenv("PI_TIMING")})
 	emit := func(v any) {
 		b, _ := json.Marshal(v)
 		b = []byte(strings.ReplaceAll(strings.ReplaceAll(string(b), `\u2028`, "\u2028"), `\u2029`, "\u2029"))
@@ -114,6 +114,15 @@ func TestPiFixture(t *testing.T) {
 		emit(map[string]any{"type": "message_end", "message": map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "thinking", "thinking": "not output"}, map[string]any{"type": "text", "text": text[:split]}, map[string]any{"type": "text", "text": text[split:]}}, "stopReason": stop, "errorMessage": "fixture provider failure"}})
 	}
 	switch scenario {
+	case "trace-stderr-live":
+		fmt.Fprint(os.Stderr, "live-stderr-prefix:"+strings.Repeat("s", 200000)+":live-stderr-end")
+		for {
+			if _, err := os.Stat(filepath.Join(dir, "trace-ack")); err == nil {
+				fixtureMark("trace-acknowledged", nil)
+				break
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
 	case "startup-stderr", "startup-stderr-zero":
 		fmt.Fprintln(os.Stderr, "fixture RPC initialization: selected model is unavailable")
 		fixtureMark("stderr-written", nil)
@@ -140,6 +149,7 @@ func TestPiFixture(t *testing.T) {
 	}
 	r := bufio.NewReader(os.Stdin)
 	count := 0
+	var lateStats map[string]any
 	for {
 		line, err := r.ReadBytes('\n')
 		if err != nil {
@@ -153,6 +163,26 @@ func TestPiFixture(t *testing.T) {
 			panic(err)
 		}
 		fixtureMark("command", cmd)
+		if cmd["type"] == "get_session_stats" {
+			if strings.HasPrefix(scenario, "stats-late") && count == 1 {
+				lateStats = cmd
+				continue
+			}
+			if scenario == "stats-delayed" {
+				time.Sleep(700 * time.Millisecond)
+			}
+			switch scenario {
+			case "stats-hang":
+				continue
+			case "stats-rejected":
+				response(cmd, false, "")
+			case "stats-malformed":
+				emit(map[string]any{"type": "response", "id": cmd["id"], "command": cmd["type"], "success": true, "data": 42})
+			default:
+				emit(map[string]any{"type": "response", "id": cmd["id"], "command": cmd["type"], "success": true, "data": map[string]any{"toolCalls": 1, "totalMessages": 4, "tokens": map[string]int{"input": 120, "output": 30, "cacheRead": 40, "total": 190}, "cost": 0.25, "contextUsage": map[string]any{"tokens": 190, "contextWindow": 1000, "percent": 19}}})
+			}
+			continue
+		}
 		if cmd["type"] == "get_state" {
 			if scenario == "startup-budget" {
 				fixtureMark("readiness-delay", nil)
@@ -175,7 +205,11 @@ func TestPiFixture(t *testing.T) {
 				emit(map[string]any{"type": "response", "id": "other", "command": "get_state", "success": true, "data": map[string]any{}})
 				continue
 			}
-			response(cmd, true, "")
+			if scenario == "observability" {
+				emit(map[string]any{"type": "response", "id": cmd["id"], "command": "get_state", "success": true, "data": map[string]any{"model": map[string]any{"id": "fixture-model", "provider": "fixture-provider", "contextWindow": 1000}, "thinkingLevel": "high", "autoCompactionEnabled": true}})
+			} else {
+				response(cmd, true, "")
+			}
 			if scenario == "duplex-backpressure" {
 				fixtureMark("duplex-start", nil)
 				for range 200 {
@@ -192,6 +226,10 @@ func TestPiFixture(t *testing.T) {
 			continue
 		}
 		count++
+		if lateStats != nil {
+			response(lateStats, scenario != "stats-late-rejected", "")
+			lateStats = nil
+		}
 		if scenario == "reject" {
 			response(cmd, false, "")
 			continue
@@ -306,6 +344,8 @@ func TestPiFixture(t *testing.T) {
 				emit(map[string]any{"type": "auto_retry_start"})
 				time.Sleep(5 * time.Millisecond)
 			}
+		case "observability":
+			emitFixtureActivity(emit)
 		case "native-recovery":
 			emit(map[string]any{"type": "message_end", "message": map[string]any{"role": "user", "content": "echo"}})
 			emit(map[string]any{"type": "message_end", "message": map[string]any{"role": "custom", "content": "ignored"}})
@@ -332,7 +372,7 @@ func TestPiFixture(t *testing.T) {
 			}
 		}
 		text := fixtureAnswer
-		if scenario == "correct-two" && count == 1 || scenario == "correct-three" && count < 3 {
+		if (scenario == "correct-two" || strings.HasPrefix(scenario, "stats-late")) && count == 1 || scenario == "correct-three" && count < 3 {
 			text = `{"subjects":[],"body":""}`
 		}
 		if scenario == "invalid-three" {
@@ -392,6 +432,10 @@ func TestPiFixture(t *testing.T) {
 		}
 	}
 	fixtureMark("eof", nil)
+	if scenario == "observability" {
+		emit(map[string]any{"type": "future_shutdown_event", "data": "shutdown-private-payload"})
+		fmt.Print("unterminated-shutdown")
+	}
 	if scenario == "force" || scenario == "cancel-cleanup" || scenario == "failure-force" || scenario == "stderr-force" {
 		for {
 			time.Sleep(time.Hour)

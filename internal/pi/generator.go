@@ -69,6 +69,7 @@ func (g *Generator) Generate(ctx context.Context, request generation.Request, re
 	}()
 	report.Emit(generation.Update{Index: 0, Status: generation.StepRunning})
 	startup, cancel := context.WithTimeout(ctx, g.startupTimeout)
+	startupFinished := logPhase("startup", g.startupTimeout)
 	var warnings []error
 	warnings, err = g.checkVersion(startup)
 	result.Warnings = append(result.Warnings, warnings...)
@@ -86,6 +87,7 @@ func (g *Generator) Generate(ctx context.Context, request generation.Request, re
 		err = startup.Err()
 	}
 	cancel()
+	startupFinished()
 	if err = finishPiStep(report, 0, err); err != nil {
 		return result, fmt.Errorf("start Pi: %w", err)
 	}
@@ -100,14 +102,25 @@ func (g *Generator) Generate(ctx context.Context, request generation.Request, re
 		}
 		slog.Info("Pi application prompt starting", "attempt", attempt, "correction", attempt > 1)
 		operation, done := context.WithTimeout(ctx, g.promptTimeout)
+		promptFinished := logPhase(fmt.Sprintf("prompt-%d", attempt), g.promptTimeout)
 		text, promptErr := rpc.prompt(operation, fmt.Sprintf("prompt-%d", attempt), prompt)
 		if promptErr == nil {
 			promptErr = operation.Err()
 		}
 		done()
+		promptFinished()
 		if promptErr != nil {
 			err = fmt.Errorf("pi prompt %d: %w", attempt, promptErr)
 			break
+		}
+		if slog.Default().Enabled(ctx, slog.LevelDebug) {
+			stats, statsDone := context.WithTimeout(ctx, time.Second)
+			statsFinished := logPhase("statistics", time.Second)
+			if statsErr := rpc.sessionStats(stats, fmt.Sprintf("stats-%d", attempt)); statsErr != nil {
+				slog.Warn("Pi session statistics unavailable", "attempt", attempt, "error", statsErr)
+			}
+			statsDone()
+			statsFinished()
 		}
 		result.Messages, err = validateResponse(text, request)
 		if err == nil {

@@ -96,6 +96,44 @@ shutdown grace before forced termination. A successful but invalid response
 permits at most two corrective prompts in the same conversation. Runtime or
 provider failures do not trigger format corrections.
 
+#### Pi diagnostics
+
+Use `--harness pi --log-level debug` for effective model/thinking settings,
+agent/turn and content-block boundaries, tool execution status/duration,
+retries, compaction, token/cache usage, cost and phase budgets/elapsed times.
+DEBUG activity summaries omit prompts, thinking text and successful tool-result
+content. The retained last-16-KiB stderr tail is logged after cleanup: normally
+DEBUG, ERROR if a generation/readiness RPC operation failed or version preflight
+exited unsuccessfully, and WARN for other abnormal/forced exits. The tail can
+contain sensitive Pi diagnostics.
+
+`--log-level trace --log-file pi-trace.log` additionally records complete
+launch arguments, outgoing RPC commands, every incoming stdout record and live
+stderr chunks, including unknown/malformed records and shutdown output. Payloads
+are not truncated. TRACE enables Pi's best-effort native startup timings
+(`PI_TIMING=1`); availability and format depend on the installed Pi version.
+Records include process IDs; stdout records include newline-termination status.
+Invalid UTF-8 chunks additionally include `data_base64` for lossless recovery.
+On RPC response activity records, `id` is the wire response ID and `exchange_id`
+is the request consuming that record. For other activity, `id` (or `prompt_id`
+on native diagnostics) identifies the consuming request, not an ID supplied by
+Pi. Streamed tool-call starts include `tool_call_id` and `tool_name`.
+
+At DEBUG/TRACE, each completed application prompt is followed by a read-only
+session-statistics query for aggregate tokens/cost and current context-window
+occupancy. It gets a separate maximum one-second wait, respects cancellation,
+and cannot invalidate candidates if it fails. No extra model request is made;
+normal logging levels issue no statistics query. Generation deadlines are
+unchanged.
+
+**TRACE logs are sensitive and can be very large.** They contain full prompts,
+Git context, any thinking emitted by the provider, file/tool contents and raw
+Pi diagnostics, potentially including secrets. Use a protected log destination.
+The inherited environment and credential files are not separately dumped.
+Logs retain the existing destination (stderr by default), never commit-message
+stdout or the `--output` file. This captures what Pi exposes through RPC/stderr,
+not raw provider HTTP traffic or reasoning the provider does not expose.
+
 ### OpenCode agent installation and customization
 
 When OpenCode is selected, the tool ensures an OpenCode agent file exists.

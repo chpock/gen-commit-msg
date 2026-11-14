@@ -15,11 +15,15 @@ import (
 	"github.com/chpock/gen-commit-msg/internal/generation"
 )
 
-func capturePiLogs(t *testing.T) *bytes.Buffer {
+func capturePiLogs(t *testing.T, levels ...slog.Level) *bytes.Buffer {
 	t.Helper()
+	level := slog.LevelDebug
+	if len(levels) > 0 {
+		level = levels[0]
+	}
 	var logs bytes.Buffer
 	previous := slog.Default()
-	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: level})))
 	t.Cleanup(func() { slog.SetDefault(previous) })
 	return &logs
 }

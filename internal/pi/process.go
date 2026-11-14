@@ -12,6 +12,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/chpock/gen-commit-msg/internal/logging"
 )
 
 type outputLine struct {
@@ -35,6 +37,10 @@ type process struct {
 func startProcess(executable, dir string, args ...string) (*process, error) {
 	cmd := exec.Command(executable, args...)
 	cmd.Dir = dir
+	if slog.Default().Enabled(context.Background(), logging.LevelTrace) {
+		cmd.Env = append(cmd.Environ(), "PI_TIMING=1")
+		slog.Log(context.Background(), logging.LevelTrace, "Pi process launch", "executable", executable, "dir", dir, "args", args, "startup_timing", true)
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	inR, inW, err := os.Pipe()
 	if err != nil {
@@ -81,6 +87,7 @@ func startProcess(executable, dir string, args ...string) (*process, error) {
 			data, readErr := r.ReadBytes('\n')
 			if len(data) > 0 {
 				line := outputLine{data: data, terminated: data[len(data)-1] == '\n'}
+				traceProcessOutput(cmd.Process.Pid, "stdout", data, slog.Bool("terminated", line.terminated))
 				select {
 				case p.lines <- line:
 				case <-p.discard:
@@ -100,7 +107,7 @@ func startProcess(executable, dir string, args ...string) (*process, error) {
 	go func() {
 		defer drains.Done()
 		defer func() { _ = errR.Close() }()
-		_, copyErr := io.Copy(&p.stderr, errR)
+		_, copyErr := io.Copy(io.MultiWriter(&p.stderr, stderrTraceWriter{pid: cmd.Process.Pid}), errR)
 		if copyErr != nil {
 			slog.Warn("Pi stderr drain failed", "error", copyErr)
 		}
@@ -119,6 +126,7 @@ func (p *process) send(data []byte) <-chan error {
 type exchange struct {
 	process *process
 	written <-chan error
+	id      string
 }
 
 func (e *exchange) finishWrite(ctx context.Context) error {
@@ -163,6 +171,7 @@ func (e *exchange) next(ctx context.Context) (outputLine, error) {
 }
 
 func (p *process) stop(grace time.Duration) error {
+	defer logPhase("shutdown", grace)()
 	close(p.discard)
 	_ = p.stdin.Close()
 	timer := time.NewTimer(grace)

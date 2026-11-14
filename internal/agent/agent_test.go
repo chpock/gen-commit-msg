@@ -116,8 +116,8 @@ func TestEnsureDefaultPromptCompatibility(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Preserve the installed OpenCode instructions and frontmatter across extraction.
-	const want = "a2f4b02a61d482e799e0baf8833a8090087903b46e5e98b7244896cdd12587a4"
+	// Protect the default instructions and frontmatter from unintended changes.
+	const want = "1167655f2be410af4bd9d8975066d5df1f6c8b468198dcd398ea44f1d3a72c93"
 	if got := fmt.Sprintf("%x", sha256.Sum256(data)); got != want {
 		t.Fatalf("installed default prompt changed: sha256 = %s, want %s", got, want)
 	}

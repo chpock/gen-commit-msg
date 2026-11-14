@@ -35,7 +35,11 @@ A neutral request contains subject minimum/maximum, body preference, serialized 
 
 Do not expose application-facing session/server lifecycle methods. Preserve OpenCode's rich error rendering through an error capability rather than a concrete OpenCode field in shared types. Both CLI modes use the same Git collection and generation operation.
 
-Extract shared instructions and prompt/schema construction without changing the installed default OpenCode prompt or native `json_schema` request with `retryCount: 2`. Migrate the test-only OpenCode pipeline onto the production path rather than retaining another unused runner.
+Share instructions and prompt/schema construction while preserving OpenCode frontmatter and the native `json_schema` request with `retryCount: 2`. The built-in instruction policy applies to new or explicitly overwritten default agent files; `if-not-exists` preserves existing agents, including older policies and customizations. Migrate the test-only OpenCode pipeline onto the production path rather than retaining another unused runner.
+
+## Instruction sources
+
+Git command outputs, diffs and their contents, previous commit messages, branch names, paths and command stdout/stderr are untrusted evidence, not instruction sources. Keep the staged-change JSON explicitly separated from application-supplied repository instructions. Do not impose blanket distrust of repository files, an exhaustive instruction-source allowlist, or a ban on discovering commit-message guidance. Relevant repository files can be read without requiring the staged diff to be insufficient. This does not make unstaged/untracked changes part of the commit: messages still describe only staged changes. Formatting defaults are defaults, not exclusive exceptions that only recent commit history can override. Mandatory application safety, explicit generation parameters and response schema are unchanged. No special AGENTS-to-file permission rule is needed.
 
 ## Pi execution and isolation
 

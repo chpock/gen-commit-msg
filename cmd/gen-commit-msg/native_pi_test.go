@@ -290,7 +290,8 @@ func newNativePiFixture(t *testing.T, pi, node, git, rg, fd string, missing, cor
 		nativeWrite(t, filepath.Join(base, "extensions/marker.mjs"), fmt.Sprintf("import fs from 'node:fs'; fs.writeFileSync(%q,'executed'); export default function() {}\n", filepath.Join(f.root, "extension-executed")), 0600)
 		nativeJSON(t, filepath.Join(base, "mcp.json"), map[string]any{"mcpServers": map[string]any{"marker": map[string]any{"command": "/bin/sh", "args": []string{"-c", fmt.Sprintf("printf executed > %q", filepath.Join(f.root, "mcp-executed"))}}}})
 	}
-	nativeWrite(t, filepath.Join(f.repo, "AGENTS.md"), "REPOSITORY_AGENTS_RULES", 0600)
+	nativeWrite(t, filepath.Join(f.repo, "AGENTS.md"), "REPOSITORY_AGENTS_RULES\nFor commit-message format rules read native-evidence/commit-rules.md.", 0600)
+	nativeWrite(t, filepath.Join(f.repo, "native-evidence", "commit-rules.md"), "NATIVE_LINKED_RULES_SENTINEL\nUse Conventional Commits.", 0600)
 	return f
 }
 
@@ -326,6 +327,7 @@ func (f *nativePiFixture) serve(w http.ResponseWriter, r *http.Request) {
 			{"grep", map[string]string{"pattern": "NATIVE_TOOL_SENTINEL", "path": "native-evidence"}},
 			{"find", map[string]string{"pattern": "*.txt", "path": "native-evidence"}},
 			{"ls", map[string]string{"path": "native-evidence"}},
+			{"read", map[string]string{"path": "native-evidence/commit-rules.md"}},
 		} {
 			data, _ := json.Marshal(tool.args)
 			calls = append(calls, map[string]any{"index": i, "id": fmt.Sprintf("native_%d", i), "type": "function", "function": map[string]any{"name": tool.name, "arguments": string(data)}})
@@ -334,6 +336,10 @@ func (f *nativePiFixture) serve(w http.ResponseWriter, r *http.Request) {
 		finish = "tool_calls"
 	} else if index == 1 && f.correction {
 		delta["content"] = "not valid JSON"
+		if err := os.WriteFile(filepath.Join(f.repo, "AGENTS.md"), []byte("REPLACED_REPOSITORY_RULES"), 0600); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
 		// Change the index after context delivery. The corrective conversation must
 		// retain the original snapshot rather than collecting this replacement.
 		_ = os.WriteFile(filepath.Join(f.repo, "change.txt"), []byte("REPLACED_GIT_SNAPSHOT\n"), 0600)
@@ -413,6 +419,9 @@ func (f *nativePiFixture) assertEvidence(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if bytes.Contains(serialized, []byte("REPLACED_REPOSITORY_RULES")) {
+			t.Error("correction replaced captured repository instructions")
+		}
 		if bytes.Contains(serialized, []byte(nativeMarker)) {
 			t.Error("global or executable-resource instructions leaked into model request")
 		}
@@ -453,8 +462,18 @@ func (f *nativePiFixture) assertEvidence(t *testing.T) {
 		}
 	}
 	if !f.correction {
-		if len(toolResults) != 4 {
+		if len(toolResults) != 5 {
 			t.Errorf("native tool results=%v", toolResults)
+		}
+		initial, err := json.Marshal(requests[0].Messages)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(initial, []byte("NATIVE_LINKED_RULES_SENTINEL")) {
+			t.Error("linked file was inlined before the read tool executed")
+		}
+		if !strings.Contains(toolResults["native_4"], "NATIVE_LINKED_RULES_SENTINEL") {
+			t.Error("linked repository rules were not read successfully")
 		}
 		for _, id := range []string{"native_0", "native_3"} {
 			want := "needle.txt"

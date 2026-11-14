@@ -97,7 +97,11 @@ missing/nonregular files are skipped and read errors are logged before trying th
 next candidate, like Pi. Symlinks are followed as in Pi: the traversal boundary
 is not a sandbox. Failed Git scope discovery aborts generation. Collection runs
 before Pi's independent startup budget, under caller cancellation. No file-size
-truncation is added. The collected text is retained across corrective prompts.
+truncation is added. The collected text is retained across corrective prompts. Git outputs, diffs,
+previous commit messages and metadata remain evidence, never instruction sources.
+The instruction policy does not ban discovering repository guidance or reading
+relevant repository files; repository conventions override formatting defaults,
+not mandatory application constraints.
 
 OpenCode still uses its native instruction discovery; application-side collection
 is currently enabled only for Pi. Its file-set selection is backend-neutral so
@@ -184,6 +188,10 @@ Important behavior:
 - `--install-agent if-not-exists` (default) keeps your custom file intact.
 - `--install-agent always` overwrites the file with the built-in default prompt.
 - `--install-agent no` skips installation entirely.
+
+Existing agent files also retain older instruction policies after an upgrade.
+Use `--install-agent always` to install the current built-in policy when desired;
+this replaces the entire agent file, including any customizations.
 
 ## Requirements
 

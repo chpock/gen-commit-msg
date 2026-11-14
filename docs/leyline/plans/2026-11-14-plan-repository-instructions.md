@@ -1,6 +1,6 @@
 # 2026-11-14-plan-repository-instructions
 
-Status: commit-1 collection/transport implemented, verified and independently reviewed; commit-2 policy correction pending. Two local commits requested; no push.
+Status: completed implementation and verification. Collection/transport is commit `f5bf6aa`; the instruction-policy change accompanies this final plan/review update in the second requested commit. Both targets passed their required checks and independent reviews; no push.
 
 ## Contract and approved decisions
 
@@ -25,4 +25,6 @@ Remove broad file-content distrust, the exhaustive instruction-source allowlist 
 
 ## Verification and delivery
 
-Use test-first focused regressions, `make all` after code changes, actual Pi with the local fixture API, and authenticated staged-change smoke where available. Native/local API tests prove transport and actual tool execution; they do not prove model understanding. Independently review each nontrivial commit target with reviewer and fresh second opinion in parallel; verify findings directly and record dispositions in `2026-11-14-plan-repository-instructions-review-log.md`. Commit only after the relevant required checks pass. Final delivery lists both commit IDs, limitations and unrun required checks. No unrelated OpenCode refactor or automatic agent-file overwrite.
+Completed: test-first regressions; final `make all`; all eight actual Pi/local API scenarios; authenticated final-model linked-rule/custom-type/required-ID smoke with competing staged-diff directives; independent reviewer and fresh second-opinion passes with verified dispositions. See `2026-11-14-plan-repository-instructions-review-log.md`. The confirmed missing-executable coverage and issue-ID policy contradictions are fixed. Current collector activation is Pi-only; no OpenCode transport/discovery refactor or installed-agent overwrite was performed. Existing OpenCode agents retain older instructions until explicitly replaced. The Git-output directive ban is not a read-content sandbox or universal prompt-injection guarantee.
+
+Validation procedure: use test-first focused regressions, `make all` after code changes, actual Pi with the local fixture API, and authenticated staged-change smoke where available. Native/local API tests prove transport and actual tool execution; they do not prove model understanding. Independently review each nontrivial commit target with reviewer and fresh second opinion in parallel; verify findings directly and record dispositions in `2026-11-14-plan-repository-instructions-review-log.md`. Commit only after the relevant required checks pass. Final delivery lists both commit IDs, limitations and unrun required checks. No unrelated OpenCode refactor or automatic agent-file overwrite.

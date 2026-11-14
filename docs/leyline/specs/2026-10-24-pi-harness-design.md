@@ -51,7 +51,7 @@ OpenCode uses a same-named per-model variant, not a universal reasoning enum. Fo
 
 The generation request updates that same message ID with the normal prompt/schema and pins the exact provider/model selected during preparation. Native persistence updates the same message rather than duplicating history. These calls add no model generation and preserve ordinary agent/default/history-based model selection. Plugins observe two `chat.message` events; reject preparation that adds content rather than retaining duplicated injected parts. An unset override preserves the existing single-prompt OpenCode request path. No automatic aliasing, level substitution, model switching, config rewriting or extra model requests are introduced.
 
-README recommends a lower explicit level for commit generation because primary-model defaults often use high thinking, and its Vim example passes a configurable thinking-level variable.
+README recommends an explicit `medium` level for commit generation because primary-model defaults often use high thinking, and its Vim example passes a configurable thinking-level variable initialized to `medium`.
 
 ## Pi execution and isolation
 

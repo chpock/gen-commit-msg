@@ -60,10 +60,10 @@ provided, thinking settings are inherited exactly as before.
 
 Primary-model defaults often use a fairly high thinking level. Commit-message
 generation usually needs less reasoning, so we recommend a lower custom level,
-such as `low`, to reduce latency and token use:
+such as `medium`, to reduce latency and token use:
 
 ```bash
-gen-commit-msg --thinking-level low
+gen-commit-msg --thinking-level medium
 ```
 
 - **Pi:** passes the level through native `--thinking`, retaining normal model
@@ -296,7 +296,7 @@ inserts the generated message at the top of the current `gitcommit` buffer.
 ```vim
 let s:gen_commit_msg_height = 5
 let s:gen_commit_msg_subject_max = 5
-let s:gen_commit_msg_thinking_level = 'low'
+let s:gen_commit_msg_thinking_level = 'medium'
 
 function! <SID>GenCommitMsgCallback(orig_bufnr, term_bufnr, tmpfile, job, status)
     if a:status == 0
@@ -316,7 +316,10 @@ endfunction
 
 function! <SID>GenCommitMsg()
     let l:tmpfile = tempname()
-    let l:cmd = 'gen-commit-msg --subject-max ' . shellescape(s:gen_commit_msg_subject_max) . ' --thinking-level ' . shellescape(s:gen_commit_msg_thinking_level) . ' --output ' . shellescape(l:tmpfile)
+    let l:cmd = 'gen-commit-msg'
+        \ . ' --subject-max ' . shellescape(s:gen_commit_msg_subject_max)
+        \ . ' --thinking-level ' . shellescape(s:gen_commit_msg_thinking_level)
+        \ . ' --output ' . shellescape(l:tmpfile)
     let l:orig_bufnr = bufnr('%')
     execute 'topleft ' . s:gen_commit_msg_height . 'split | enew'
     let l:Callback = function('<SID>GenCommitMsgCallback', [l:orig_bufnr, bufnr('%'), l:tmpfile])

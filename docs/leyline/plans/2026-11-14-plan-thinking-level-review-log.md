@@ -8,7 +8,7 @@ Task: `2026-11-14-plan-thinking-level`.
 - Carry the override through the existing shared generation request for TTY and non-TTY. Unset Pi arguments and OpenCode requests remain unchanged.
 - Pi uses native `--thinking`, without selecting a model or changing saved defaults. Native capability limits remain in force.
 - OpenCode uses same-named model variants. The operator approved failure before generation for an unavailable variant, and native `noReply` preparation/catalog lookup to preserve native model selection. The generation request updates the prepared message ID and pins the exact resolved provider/model. Plugins observe two `chat.message` events; added preparation content or malformed metadata fails rather than being silently retained.
-- README, current product/UX specs, CLI help and the Vim variable/argument are updated. README recommends a lower custom level such as `low` because primary-model defaults often use higher thinking.
+- README, current product/UX specs, CLI help and the Vim variable/argument are updated. README recommends a custom `medium` level because primary-model defaults often use higher thinking.
 
 ## Primary evidence and consultations
 
@@ -75,3 +75,10 @@ The built binary's help lists the flag and choices; an invalid value exits 2 wit
 Implementation, documentation, required native-enabled checks, both independent implementation inspections and final whitespace/status verification pass. Their material concerns have been checked and disposed of above. At the initial implementation handoff, changes were left unstaged; no commit, push or deployment had been performed.
 
 OpenCode variants remain model/configuration-specific; there is no promise that all Pi names exist on every OpenCode model or map to identical provider budgets. Pi retains its native model-capability limits. Native execution was checked on installed Pi 1.5.2 and OpenCode 1.19.5 with controlled local APIs; all provider/model combinations, other OpenCode versions and paid external-provider generation were not exercised. These are verification boundaries, not silently accepted test failures.
+
+
+## Documentation follow-up
+
+The operator selected `medium` for the README command example, recommendation and Vim variable initialization. Product/UX guidance is consistent with that choice. The runtime default remains unset; earlier native low/high test observations are unchanged. The exact README Vim snippet loads in clean headless Vim and evaluates the thinking-level variable to `medium`; documentation whitespace checks pass.
+
+The Vim command construction uses one option per line with native continuation syntax. Clean headless Vim evaluation confirmed that it produces the same command as the original expression, including shell escaping for an output path containing spaces and quotes.

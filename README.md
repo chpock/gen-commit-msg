@@ -29,6 +29,7 @@ via `--output`).
 - Collects structured staged-change context via Git before prompting AI.
 - Automatically prefers Pi when available, or uses OpenCode if Pi is absent.
 - Supports explicit `--harness pi` and `--harness opencode` selection.
+- Optional thinking-level overrides without changing the configured model.
 - Owns runtime startup and cleanup before selection or output.
 - Uses a sessionless Pi RPC process with read-only tools and strict JSON checks.
 - Starts `opencode serve` and manages its dedicated agent and session.
@@ -48,6 +49,44 @@ Once selected, a harness never falls back to the other one after a version,
 authentication, generation, timeout or invalid-response error. Configure and
 log in to your chosen harness separately before using this tool.
 
+### Thinking level
+
+Use `--thinking-level` or `GCM_THINKING_LEVEL` to override thinking for this
+invocation without choosing a different model or changing saved defaults.
+Accepted values are `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`.
+Other values, including an explicitly empty flag, are configuration errors.
+The default is unset: when neither the flag nor a nonempty environment value is
+provided, thinking settings are inherited exactly as before.
+
+Primary-model defaults often use a fairly high thinking level. Commit-message
+generation usually needs less reasoning, so we recommend a lower custom level,
+such as `low`, to reduce latency and token use:
+
+```bash
+gen-commit-msg --thinking-level low
+```
+
+- **Pi:** passes the level through native `--thinking`, retaining normal model
+  selection. Pi may limit the effective level to the selected model's capabilities.
+- **OpenCode:** uses the same-named model `variant`. Variant names and settings
+  depend on the model/provider and configuration; there is no automatic level
+  substitution. If the selected model lacks the requested variant, generation
+  fails before any model request and reports its available variants.
+
+For an explicit OpenCode override, the application first prepares an empty user
+message with native `noReply`, reads the selected model's variant metadata, then
+updates the same message with the generation prompt and the exact model OpenCode
+selected. Preparation and metadata queries make no model requests. OpenCode
+plugins receive two `chat.message` events for that message; preparation that adds
+message content is rejected rather than duplicating it in the final prompt.
+Omitting the thinking override adds none of these requests. OpenCode's own
+`--thinking` flag only displays reasoning; it does not set its level.
+
+OpenCode overrides require native `variant`, `noReply` and provider-variant
+metadata support; this path is verified with OpenCode 1.19.5. Incompatible
+metadata is reported as an error, not silently ignored. The additional requests
+retain the existing per-request HTTP timeout, so total elapsed time can be longer.
+
 ### Pi
 
 Pi **1.4.0 or newer** is required; older or unrecognizable versions are rejected
@@ -58,14 +97,13 @@ and `Ctrl+S` to save its startup thinking level. Compatible endpoints in
 `models.json` remain supported; extension-provided models are not available
 because extensions are disabled.
 
-**There is no separate model or thinking selection for `gen-commit-msg`.** It
-has no application-specific model/thinking flags or environment variables,
-passes neither `--model` nor `--thinking` to Pi, and does not change them through
-RPC. Each invocation uses Pi's normal startup selection from user settings,
-including `defaultProvider`, `defaultModel`, `defaultThinkingLevel`,
-`enabledModels` and per-model `modelThinkingLevels`. Pi also limits thinking to
-the selected model's capabilities; the effective choice is not determined by
-the `default*` fields alone.
+**There is no application-specific model selection.** The tool never passes
+`--model` or changes the model through RPC. Without a thinking-level override,
+it also passes no `--thinking` and uses Pi's normal startup selection from user
+settings, including `defaultProvider`, `defaultModel`, `defaultThinkingLevel`,
+`enabledModels` and per-model `modelThinkingLevels`. With an override, it adds
+only `--thinking <level>`. Pi limits thinking to the selected model's capabilities;
+the effective choice is not determined by the `default*` fields alone.
 
 The model/thinking currently selected in another open Pi session is not
 inherited. Project settings do not affect this selection because they are
@@ -258,6 +296,7 @@ inserts the generated message at the top of the current `gitcommit` buffer.
 ```vim
 let s:gen_commit_msg_height = 5
 let s:gen_commit_msg_subject_max = 5
+let s:gen_commit_msg_thinking_level = 'low'
 
 function! <SID>GenCommitMsgCallback(orig_bufnr, term_bufnr, tmpfile, job, status)
     if a:status == 0
@@ -277,7 +316,7 @@ endfunction
 
 function! <SID>GenCommitMsg()
     let l:tmpfile = tempname()
-    let l:cmd = 'gen-commit-msg --subject-max ' . shellescape(s:gen_commit_msg_subject_max) . ' --output ' . shellescape(l:tmpfile)
+    let l:cmd = 'gen-commit-msg --subject-max ' . shellescape(s:gen_commit_msg_subject_max) . ' --thinking-level ' . shellescape(s:gen_commit_msg_thinking_level) . ' --output ' . shellescape(l:tmpfile)
     let l:orig_bufnr = bufnr('%')
     execute 'topleft ' . s:gen_commit_msg_height . 'split | enew'
     let l:Callback = function('<SID>GenCommitMsgCallback', [l:orig_bufnr, bufnr('%'), l:tmpfile])
@@ -302,6 +341,7 @@ Flag precedence is:
 | Flag | Env var | Default | Description |
 |---|---|---|---|
 | `--harness` | `GCM_HARNESS` | `auto` | `auto`, `pi`, `opencode`; auto prefers Pi |
+| `--thinking-level` | `GCM_THINKING_LEVEL` | unset | `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; inherits harness settings when unset |
 | `--subject-min`, `-m` | `GCM_SUBJECT_MIN` | `1` | Minimum subject candidate count |
 | `--subject-max`, `-x` | `GCM_SUBJECT_MAX` | `5` | Maximum subject candidate count (max 20) |
 | `--body` | `GCM_BODY` | `true` | Generate commit body |
@@ -387,7 +427,20 @@ local model API, not operator credentials or paid model requests. They require
 Node, `rg` and `fd`/`fdfind`. Set `GCM_TEST_NATIVE_PI_PATH` to select the installed
 Node-based Pi CLI explicitly. Ordinary `make all` skips them before looking up
 native prerequisites. The checks cover real tools, missing helpers without
-downloads, instruction isolation, correction and PTY selection/cancellation.
+downloads, instruction isolation, correction, inherited/overridden thinking and
+PTY selection/cancellation.
+
+Optional actual-OpenCode thinking-level checks:
+
+```bash
+GCM_TEST_NATIVE_OPENCODE=1 go test -count=1 -race ./cmd/gen-commit-msg -run '^TestNativeOpenCodeThinkingLevel$'
+```
+
+Set `GCM_TEST_NATIVE_OPENCODE_PATH` to select an installed OpenCode explicitly.
+These checks use isolated configuration, history and agent files with a local
+model API and dummy credentials. They verify effective thinking budgets, native
+agent/history model selection, same-message preparation, TTY selection and zero
+model requests for an unsupported variant. Ordinary suites skip them.
 
 ## Project structure
 

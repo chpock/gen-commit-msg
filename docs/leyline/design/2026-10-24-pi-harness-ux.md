@@ -8,7 +8,9 @@ Approved design: D1–D14 in `../plans/2026-10-24-pi-harness-plan.md`.
 
 `--harness auto|pi|opencode` and `GCM_HARNESS` use flag > environment > default precedence; default is auto. Auto prefers a Pi executable on PATH and otherwise OpenCode. Once selected, errors never switch backends. Explicit selection is deterministic.
 
-Help identifies `--agent` and `--install-agent` as OpenCode-only. Pi uses its ordinary configured model/authentication and ignores these options; no agent installation occurs. README examples show explicit harness selection, minimum Pi 1.4.0 and native search-helper prerequisites.
+`--thinking-level` and `GCM_THINKING_LEVEL` optionally override the current generation's thinking without selecting another model or changing saved defaults. Accept exactly `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; invalid or explicitly empty flags exit 2. The default is unset and preserves normal harness behavior. Pi applies native capability limits; OpenCode requires the same-named variant on its selected model and reports an actionable runtime error before generation if absent. OpenCode prepares/validates the selected model without a model call, then updates the same message; plugins see two `chat.message` events, and content added during empty preparation is rejected. No extra progress step is added.
+
+Help identifies `--agent` and `--install-agent` as OpenCode-only. Pi uses its ordinary configured model/authentication and ignores these options; no agent installation occurs. README examples show explicit harness selection, minimum Pi 1.4.0 and native search-helper prerequisites. README recommends a lower custom thinking level because primary models often default to higher levels; the Vim example defines and passes a thinking-level variable.
 
 Help/version and no-staged-files exits require no harness. Non-TTY multi-subject requests fail before harness startup, preserving the existing suggestion to use `--subject-max 1`. Missing executables, unsupported/unrecognizable Pi versions and runtime failures have actionable English errors. Invalid harness configuration exits 2; runtime/output failures exit 1.
 

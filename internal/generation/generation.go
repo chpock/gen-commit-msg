@@ -15,6 +15,7 @@ type Request struct {
 	SubjectMin             int
 	SubjectMax             int
 	Body                   bool
+	ThinkingLevel          string
 	ContextJSON            string
 	RepositoryInstructions string
 }

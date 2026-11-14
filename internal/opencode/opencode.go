@@ -47,6 +47,7 @@ func (r *realSessionClient) Delete(ctx context.Context, sessionID string, params
 
 type Client struct {
 	session sessionClient
+	api     *opencode.Client
 	baseURL string
 	repoDir string
 	agent   string
@@ -55,7 +56,7 @@ type Client struct {
 func NewClient(baseURL, repoDir, agent string) *Client {
 	httpClient := &http.Client{Timeout: 120 * time.Second}
 	oc := opencode.NewClient(option.WithBaseURL(baseURL), option.WithHTTPClient(httpClient))
-	return &Client{session: &realSessionClient{session: oc.Session}, baseURL: baseURL, repoDir: repoDir, agent: agent}
+	return &Client{session: &realSessionClient{session: oc.Session}, api: oc, baseURL: baseURL, repoDir: repoDir, agent: agent}
 }
 
 func newClientWithSession(s sessionClient, repoDir, agent string) *Client {
@@ -103,7 +104,7 @@ func (c *Client) CreateSession(ctx context.Context, agentName string) (string, e
 
 func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params GenerateParams) ([]CommitMessage, error) {
 	slog.Info("sending generation prompt", "session_id", sessionID,
-		"subject_min", params.SubjectMin, "subject_max", params.SubjectMax, "body", params.Body, "dir", c.repoDir)
+		"subject_min", params.SubjectMin, "subject_max", params.SubjectMax, "body", params.Body, "thinking_level", params.ThinkingLevel, "dir", c.repoDir)
 
 	prompt := generation.BuildPrompt(params)
 	format := map[string]any{
@@ -123,20 +124,39 @@ func (c *Client) GenerateMessages(ctx context.Context, sessionID string, params 
 		}),
 	}
 
+	requestOptions := []option.RequestOption{option.WithJSONSet("format", format)}
+	if params.ThinkingLevel != "" {
+		selection, err := c.prepareThinkingLevel(ctx, sessionID, params.ThinkingLevel)
+		if err != nil {
+			slog.Error("OpenCode thinking-level preparation failed", "session_id", sessionID, "thinking_level", params.ThinkingLevel, "error", err)
+			return nil, &AppError{
+				Op: "configure_thinking_level", Message: "failed to configure OpenCode thinking level",
+				OC: buildHTTPOCError(err, "configure_thinking_level", sessionID, c.agent), Err: err,
+			}
+		}
+		promptParams.MessageID = opencode.F(selection.messageID)
+		// Pin the model OpenCode selected during preparation, not a second default lookup.
+		promptParams.Model = opencode.F(opencode.SessionPromptParamsModel{
+			ProviderID: opencode.F(selection.providerID), ModelID: opencode.F(selection.modelID),
+		})
+		requestOptions = append(requestOptions, option.WithJSONSet("variant", params.ThinkingLevel))
+	}
+
 	if slog.Default().Enabled(ctx, logging.LevelTrace) {
 		paramsJSON, _ := json.Marshal(promptParams)
 		formatJSON, _ := json.Marshal(format)
 		slog.LogAttrs(ctx, logging.LevelTrace, "opencode request: prompt",
 			slog.String("session_id", sessionID),
 			slog.String("params", string(paramsJSON)),
-			slog.String("format", string(formatJSON)))
+			slog.String("format", string(formatJSON)),
+			slog.String("thinking_level", params.ThinkingLevel))
 	}
 
 	res, err := c.session.Prompt(
 		ctx,
 		sessionID,
 		promptParams,
-		option.WithJSONSet("format", format),
+		requestOptions...,
 	)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {

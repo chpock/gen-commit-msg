@@ -110,6 +110,7 @@ Priority: CLI flag > env var > default.
 | `--subject-max` | `-x` | `GCM_SUBJECT_MAX` | 1..20 | 5 | Maximum number of subject line variants to request |
 | `--body` | | `GCM_BODY` | true, false | true | Whether to generate message body |
 | `--harness` | | `GCM_HARNESS` | auto, pi, opencode | auto | Select generation harness; auto prefers Pi |
+| `--thinking-level` | | `GCM_THINKING_LEVEL` | off, minimal, low, medium, high, xhigh, max | unset | Override thinking for this invocation without selecting a model; see the harness spec for native capability limits and OpenCode variant validation |
 | `--quiet` | `-q` | `GCM_QUIET` | true, false | false | Suppress progress messages and spinner (not the selection list) |
 | `--agent` | `-a` | `GCM_AGENT` | string | gen-commit-msg | OpenCode-only agent name; ignored by Pi |
 | `--pause` | | `GCM_PAUSE` | on, off, on-error | on-error | Pause before exit behavior |

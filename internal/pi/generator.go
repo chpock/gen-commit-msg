@@ -36,7 +36,7 @@ func (g *Generator) Steps() []string {
 }
 
 func (g *Generator) Generate(ctx context.Context, request generation.Request, report generation.Reporter) (result generation.Result, err error) {
-	slog.Info("Pi generation starting", "executable", g.config.Executable, "repo", g.config.RepoDir)
+	slog.Info("Pi generation starting", "executable", g.config.Executable, "repo", g.config.RepoDir, "thinking_level", request.ThinkingLevel)
 	var rpc *process
 	step := 0
 	defer func() {
@@ -84,8 +84,11 @@ func (g *Generator) Generate(ctx context.Context, request generation.Request, re
 		err = startup.Err()
 	}
 	if err == nil {
-		rpc, err = startProcess(g.config.Executable, g.config.RepoDir,
-			"--mode", "rpc", "--no-session", "--no-extensions", "--no-mcp", "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files", "--no-approve", "--offline", "--tools", "read,grep,find,ls", "--system-prompt", generation.Instructions, "--append-system-prompt", "")
+		args := []string{"--mode", "rpc", "--no-session", "--no-extensions", "--no-mcp", "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files", "--no-approve", "--offline", "--tools", "read,grep,find,ls", "--system-prompt", generation.Instructions, "--append-system-prompt", ""}
+		if request.ThinkingLevel != "" {
+			args = append(args, "--thinking", request.ThinkingLevel)
+		}
+		rpc, err = startProcess(g.config.Executable, g.config.RepoDir, args...)
 	}
 	if err == nil {
 		err = rpc.ready(startup)

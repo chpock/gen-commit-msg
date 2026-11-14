@@ -12,19 +12,20 @@ import (
 )
 
 type Config struct {
-	Harness      string
-	SubjectMin   uint
-	SubjectMax   uint
-	Body         bool
-	Quiet        bool
-	Agent        string
-	LogLevel     string
-	LogFile      string
-	Pause        string
-	InstallAgent string
-	Output       string
-	Version      bool
-	Help         bool
+	Harness       string
+	ThinkingLevel string
+	SubjectMin    uint
+	SubjectMax    uint
+	Body          bool
+	Quiet         bool
+	Agent         string
+	LogLevel      string
+	LogFile       string
+	Pause         string
+	InstallAgent  string
+	Output        string
+	Version       bool
+	Help          bool
 }
 
 func initFlags() *flag.FlagSet {
@@ -34,6 +35,7 @@ func initFlags() *flag.FlagSet {
 	flags.Bool("body", true, "generate message body")
 	flags.BoolP("quiet", "q", false, "suppress progress output")
 	flags.String("harness", "auto", "generation harness: auto, pi, opencode")
+	flags.String("thinking-level", "", "thinking level: off, minimal, low, medium, high, xhigh, max (default: harness setting)")
 	flags.StringP("agent", "a", "gen-commit-msg", "agent name (OpenCode-only)")
 	flags.StringP("log-level", "l", "none", "log verbosity: trace, debug, info, warn, error, none")
 	flags.String("log-file", "", "log output file (default: stderr)")
@@ -70,6 +72,17 @@ func ParseFlags() (*Config, error) {
 		err := fmt.Errorf("harness must be one of auto, pi, opencode, got %q", cfg.Harness)
 		slog.Error("invalid harness configuration", "harness", cfg.Harness, "error", err)
 		return nil, err
+	}
+
+	cfg.ThinkingLevel = getStringFlagOrEnv(flags, "thinking-level", "GCM_THINKING_LEVEL", "")
+	if flags.Changed("thinking-level") || cfg.ThinkingLevel != "" {
+		switch cfg.ThinkingLevel {
+		case "off", "minimal", "low", "medium", "high", "xhigh", "max":
+		default:
+			err := fmt.Errorf("thinking-level must be one of off, minimal, low, medium, high, xhigh, max, got %q", cfg.ThinkingLevel)
+			slog.Error("invalid thinking level configuration", "thinking_level", cfg.ThinkingLevel, "error", err)
+			return nil, err
+		}
 	}
 
 	cfg.SubjectMin = getUintFlagOrEnv(flags, "subject-min", "GCM_SUBJECT_MIN", 1)

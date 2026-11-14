@@ -18,6 +18,7 @@ No commits, index changes, credential management, sandbox, extension, SDK servic
 | Flag | Environment | Values | Default |
 | --- | --- | --- | --- |
 | `--harness` | `GCM_HARNESS` | `auto`, `pi`, `opencode` | `auto` |
+| `--thinking-level` | `GCM_THINKING_LEVEL` | `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` | unset |
 
 Precedence is explicit flag, nonempty environment value, then default. An invalid selected value is a configuration error (exit 2). Help/version preserve their existing early exits without runtime requirements.
 
@@ -27,11 +28,12 @@ Precedence is explicit flag, nonempty environment value, then default. An invali
 - No-staged-files exits and non-TTY multi-result rejection happen before starting or probing a generation runtime.
 - Pi ignores OpenCode-only `--agent`, `--install-agent` and their environment settings, installs no agent and logs the ignored configuration. Document this scope in help/README.
 - Preserve ordinary Pi global model/provider/thinking, authentication and runtime settings. Do not add an application model flag or separate Pi configuration directory.
-- The application has no separate model/thinking flags or environment variables, passes neither `--model` nor `--thinking`, and does not change them through RPC. Each invocation uses Pi's ordinary startup selection from user settings, including `defaultProvider`, `defaultModel`, `defaultThinkingLevel`, `enabledModels`, per-model `modelThinkingLevels` and supported thinking-level limits. The effective choice is not restricted to the `default*` fields. Do not inherit the current selection from another open Pi session; project settings remain disabled.
+- There is no application model flag or model mutation through RPC. Without a thinking-level override, Pi's ordinary startup selection remains unchanged, including `defaultProvider`, `defaultModel`, `defaultThinkingLevel`, `enabledModels`, per-model `modelThinkingLevels` and supported thinking-level limits. With an override, add native `--thinking <level>` without `--model`; do not modify saved defaults. The effective level remains subject to native model capabilities. Do not inherit another open Pi session's selection; project settings remain disabled.
+- `--thinking-level` is optional and works for both backends. Reject values outside the listed Pi domain, including an explicitly empty flag, as configuration errors (exit 2). Empty environment values remain unset. Help/version retain their early exits. When unset, add no thinking-related arguments, RPC commands, metadata queries or OpenCode preparation calls.
 
 ## Shared generation boundary
 
-A neutral request contains subject minimum/maximum, body preference, serialized Git context and optional separately rendered repository instructions. Pi populates the latter; OpenCode retains native discovery and does not opt into application collection. A neutral result contains candidates with the existing subject/body semantics and separate nonfatal cleanup diagnostics. Cancellation and a progress reporter are part of the operation. Backends declare their actual progress steps; the TUI holds no server, client or process reference.
+A neutral request contains subject minimum/maximum, body preference, an optional thinking-level override, serialized Git context and optional separately rendered repository instructions. Pi populates the latter; OpenCode retains native discovery and does not opt into application collection. A neutral result contains candidates with the existing subject/body semantics and separate nonfatal cleanup diagnostics. Cancellation and a progress reporter are part of the operation. Backends declare their actual progress steps; the TUI holds no server, client or process reference.
 
 Do not expose application-facing session/server lifecycle methods. Preserve OpenCode's rich error rendering through an error capability rather than a concrete OpenCode field in shared types. Both CLI modes use the same Git collection and generation operation.
 
@@ -40,6 +42,16 @@ Share instructions and prompt/schema construction while preserving OpenCode fron
 ## Instruction sources
 
 Git command outputs, diffs and their contents, previous commit messages, branch names, paths and command stdout/stderr are untrusted evidence, not instruction sources. Keep the staged-change JSON explicitly separated from application-supplied repository instructions. Do not impose blanket distrust of repository files, an exhaustive instruction-source allowlist, or a ban on discovering commit-message guidance. Relevant repository files can be read without requiring the staged diff to be insufficient. This does not make unstaged/untracked changes part of the commit: messages still describe only staged changes. Formatting defaults are defaults, not exclusive exceptions that only recent commit history can override. Mandatory application safety, explicit generation parameters and response schema are unchanged. No special AGENTS-to-file permission rule is needed.
+
+## Thinking-level overrides
+
+The runtime override does not change prompt text, response schema, model choice, saved defaults or agent files. Pi receives native `--thinking`; Pi 1.4.0 and newer accept all seven configured values, subject to model-capability limits.
+
+OpenCode uses a same-named per-model variant, not a universal reasoning enum. For an explicit override, prepare an empty user message with the requested agent/variant and `noReply: true`, without a model override. Require a valid returned user-message ID, session, resolved provider/model and requested variant. Read the native `/config/providers` catalog and reject a missing requested variant before a model call; include the selected model and available variants in the error. Fail on missing/malformed metadata instead of guessing a default or reading native user config/history files directly.
+
+The generation request updates that same message ID with the normal prompt/schema and pins the exact provider/model selected during preparation. Native persistence updates the same message rather than duplicating history. These calls add no model generation and preserve ordinary agent/default/history-based model selection. Plugins observe two `chat.message` events; reject preparation that adds content rather than retaining duplicated injected parts. An unset override preserves the existing single-prompt OpenCode request path. No automatic aliasing, level substitution, model switching, config rewriting or extra model requests are introduced.
+
+README recommends a lower explicit level for commit generation because primary-model defaults often use high thinking, and its Vim example passes a configurable thinking-level variable.
 
 ## Pi execution and isolation
 
@@ -108,7 +120,7 @@ After confirmed generation, abnormal/forced cleanup is a visible warning and doe
 
 ## Acceptance and delivery gates
 
-- Configuration/selection tests cover precedence, both/either/neither executable, explicit modes, ignored OpenCode options, prechecks and absence of fallback after all selected-Pi failures.
+- Configuration/selection tests cover precedence, all seven thinking values, invalid/explicit-empty values, unset behavior, help/version, both/either/neither executable, explicit modes, ignored OpenCode options, prechecks and absence of fallback after all selected-Pi failures. Verify explicit thinking in both backends and native effective provider settings; OpenCode unsupported variants must fail without a model call.
 - Production-path OpenCode regressions cover request/prompt compatibility, cleanup ordering/ownership, cancellation, warnings and the shutdown correction. Pin existing OpenCode subprocess fixtures before auto can discover host Pi.
 - Pi process fixtures prove acceptance/completion, retries/corrections, independent budgets, all required validation failures, large/split records, errors/cancellation/termination and completed reaping through observable handshakes/counters.
 - Native Pi plus a local fixture API proves isolation, zero persisted sessions, real helper-backed tool calls and missing-helper behavior without downloads. Ordinary unit suites require no installed Pi/helpers or external service.

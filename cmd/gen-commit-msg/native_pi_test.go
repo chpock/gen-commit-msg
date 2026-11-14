@@ -47,7 +47,7 @@ func TestNativePi(t *testing.T) {
 		t.Fatal("native delivery check requires installed fd or fdfind")
 	}
 	for _, tc := range []struct {
-		name, logLevel                                   string
+		name, logLevel, thinking, wantThinking           string
 		missing, correction, file, tty, cancel, existing bool
 	}{
 		{name: "cached-rg-system-fd-stdout"},
@@ -55,17 +55,35 @@ func TestNativePi(t *testing.T) {
 		{name: "debug-native-tools", logLevel: "debug"},
 		{name: "missing-helpers-file", missing: true, file: true},
 		{name: "format-correction", correction: true},
+		{name: "thinking-override", thinking: "low", wantThinking: "low"},
+		{name: "thinking-inherited", wantThinking: "high"},
+		{name: "thinking-tty-selection", thinking: "low", wantThinking: "low", tty: true},
 		{name: "tty-second-selection", tty: true},
 		{name: "tty-cancel-existing", tty: true, cancel: true, existing: true},
 		{name: "tty-cancel-missing", tty: true, cancel: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newNativePiFixture(t, pi, node, git, rg, fd, tc.missing, tc.correction, tc.tty)
+			if tc.wantThinking != "" {
+				settingsPath := filepath.Join(f.root, "agent", "settings.json")
+				settings := nativeReadJSON(t, settingsPath)
+				settings["defaultThinkingLevel"] = "high"
+				nativeJSON(t, settingsPath, settings)
+				modelsPath := filepath.Join(f.root, "agent", "models.json")
+				models := nativeReadJSON(t, modelsPath)
+				model := models["providers"].(map[string]any)["gcm-native-fixture"].(map[string]any)["models"].([]any)[0].(map[string]any)
+				model["reasoning"] = true
+				model["compat"] = map[string]any{"supportsReasoningEffort": true}
+				nativeJSON(t, modelsPath, models)
+			}
 			output := filepath.Join(f.root, "message")
 			if tc.existing {
 				nativeWrite(t, output, "previous message\n", 0600)
 			}
 			args := []string{"--harness", "auto", "--pause", "off", "--body=false", "--subject-min", "1", "--subject-max", "1"}
+			if tc.thinking != "" {
+				args = append(args, "--thinking-level", tc.thinking)
+			}
 			if tc.tty {
 				args = append(args, "--subject-max", "2")
 			}
@@ -135,6 +153,20 @@ func TestNativePi(t *testing.T) {
 				}
 			}
 			f.assertEvidence(t)
+			if tc.wantThinking != "" {
+				f.mu.Lock()
+				requests := append([]nativeAPIRequest(nil), f.requests...)
+				f.mu.Unlock()
+				for _, request := range requests {
+					if request.ReasoningEffort != tc.wantThinking {
+						t.Errorf("provider reasoning_effort = %q, want %q", request.ReasoningEffort, tc.wantThinking)
+					}
+				}
+				settings := nativeReadJSON(t, filepath.Join(f.root, "agent", "settings.json"))
+				if settings["defaultThinkingLevel"] != "high" {
+					t.Errorf("thinking override changed saved default: %v", settings)
+				}
+			}
 			if tc.logLevel != "" {
 				data, err := os.ReadFile(logFile)
 				if err != nil {
@@ -170,9 +202,10 @@ type nativeAPIMessage struct {
 	ToolCallID string          `json:"tool_call_id"`
 }
 type nativeAPIRequest struct {
-	Model    string             `json:"model"`
-	Messages []nativeAPIMessage `json:"messages"`
-	Tools    []struct {
+	Model           string             `json:"model"`
+	ReasoningEffort string             `json:"reasoning_effort"`
+	Messages        []nativeAPIMessage `json:"messages"`
+	Tools           []struct {
 		Function struct {
 			Name string `json:"name"`
 		} `json:"function"`
@@ -229,6 +262,19 @@ func nativeJSON(t *testing.T, path string, value any) {
 		t.Fatal(err)
 	}
 	nativeWrite(t, path, string(data), 0600)
+}
+
+func nativeReadJSON(t *testing.T, path string) map[string]any {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(data, &value); err != nil {
+		t.Fatal(err)
+	}
+	return value
 }
 
 func newNativePiFixture(t *testing.T, pi, node, git, rg, fd string, missing, correction, multiple bool) *nativePiFixture {

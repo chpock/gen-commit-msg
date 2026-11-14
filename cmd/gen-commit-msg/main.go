@@ -151,7 +151,7 @@ func run() (exitCode int) {
 
 	slog.Debug("gen-commit-msg starting", "version", version,
 		"subject_min", cfg.SubjectMin, "subject_max", cfg.SubjectMax, "body", cfg.Body,
-		"quiet", cfg.Quiet, "harness", cfg.Harness, "agent", cfg.Agent, "log_level", cfg.LogLevel,
+		"quiet", cfg.Quiet, "harness", cfg.Harness, "thinking_level", cfg.ThinkingLevel, "agent", cfg.Agent, "log_level", cfg.LogLevel,
 		"log_file", cfg.LogFile, "pause", cfg.Pause, "install_agent", cfg.InstallAgent,
 		"output", cfg.Output)
 	isTTY := isTerminal()
@@ -241,7 +241,10 @@ func run() (exitCode int) {
 			InstallAgent: cfg.InstallAgent, SessionDeleteTimeout: deleteTimeout,
 		})
 	}
-	request := generation.Request{SubjectMin: int(cfg.SubjectMin), SubjectMax: int(cfg.SubjectMax), Body: cfg.Body}
+	request := generation.Request{
+		SubjectMin: int(cfg.SubjectMin), SubjectMax: int(cfg.SubjectMax), Body: cfg.Body,
+		ThinkingLevel: cfg.ThinkingLevel,
+	}
 	var selected string
 	if isTTY {
 		model, err := runInteractiveGeneration(ctx, backend, request, cfg.Quiet)

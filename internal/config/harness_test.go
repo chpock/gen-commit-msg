@@ -6,10 +6,12 @@ import (
 	"testing"
 )
 
-// Existing configuration tests must not inherit the operator's harness choice.
+// Existing configuration tests must not inherit the operator's harness choices.
 func TestMain(m *testing.M) {
-	if err := os.Unsetenv("GCM_HARNESS"); err != nil {
-		panic(err)
+	for _, name := range []string{"GCM_HARNESS", "GCM_THINKING_LEVEL"} {
+		if err := os.Unsetenv(name); err != nil {
+			panic(err)
+		}
 	}
 	os.Exit(m.Run())
 }
